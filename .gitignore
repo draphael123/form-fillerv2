@@ -1,9 +1,6 @@
 # Dependencies
 node_modules/
 
-# Extension zip (optional - can be built)
-website/public/docufill-extension.zip
-
 # OS
 .DS_Store
 Thumbs.db
