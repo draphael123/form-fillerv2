@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (v && manifest.version) v.textContent = 'v' + manifest.version;
   } catch (e) {}
   await loadFromStorage();
+  if (!state.csvData) loadSampleCsv(true);
   applyTheme(state.settings.theme);
   setupTabs();
   setupSettingsTab();
@@ -295,15 +296,15 @@ function setupDataTab() {
 
 const SAMPLE_CSV = 'Name,Email,Company\nJane Doe,jane@example.com,Acme Inc\nJohn Smith,john@example.com,Widget Co';
 
-function loadSampleCsv() {
+function loadSampleCsv(silent) {
   try {
     const parsed = parseCSV(SAMPLE_CSV);
     state.csvData = { name: 'sample.csv', columns: parsed.columns, rows: parsed.rows };
     saveToStorage();
     refreshAll();
-    showToast('Loaded sample CSV (' + parsed.rows.length + ' rows)', 'success');
+    if (!silent) showToast('Loaded sample CSV (' + parsed.rows.length + ' rows)', 'success');
   } catch (e) {
-    showToast('Failed to load sample', 'error');
+    if (!silent) showToast('Failed to load sample', 'error');
   }
 }
 
@@ -509,12 +510,76 @@ async function parseXLSXWithSheet(dataArray, sheetIndex) {
 // ── Mapping Tab ─────────────────────────────────────────
 
 function setupMappingTab() {
+  $('scanFieldsBtn').addEventListener('click', scanPageForFields);
   $('captureModeBtn').addEventListener('click', toggleCaptureMode);
   $('confirmMappingBtn').addEventListener('click', confirmMapping);
   $('cancelCaptureBtn').addEventListener('click', cancelCapture);
   $('saveTemplateBtn').addEventListener('click', saveTemplate);
   $('newTemplateBtn').addEventListener('click', newTemplate);
   $('loadTemplateBtn').addEventListener('click', loadTemplateIntoEditor);
+}
+
+function normalizeForMatch(s) {
+  return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim().replace(/[^a-z0-9\s]/g, '');
+}
+
+function scoreColumnMatch(fieldLabel, column) {
+  if (!column) return 0;
+  const a = normalizeForMatch(fieldLabel);
+  const b = normalizeForMatch(column);
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (fieldLabel.toLowerCase() === column.toLowerCase()) return 0.98;
+  const aNorm = a.replace(/\s/g, '');
+  const bNorm = b.replace(/\s/g, '');
+  if (aNorm === bNorm) return 0.95;
+  if (b.includes(a) || a.includes(b)) return 0.7;
+  const aWords = a.split(/\s+/).filter(Boolean);
+  const bWords = b.split(/\s+/).filter(Boolean);
+  const overlap = aWords.filter(w => bWords.some(bw => bw.includes(w) || w.includes(bw))).length;
+  if (overlap > 0) return 0.4 + (overlap / Math.max(aWords.length, bWords.length)) * 0.4;
+  return 0;
+}
+
+function scanPageForFields() {
+  if (!state.csvData || !state.csvData.columns.length) {
+    showToast('Load a CSV/Excel file first (Data tab)', 'error');
+    return;
+  }
+  const btn = $('scanFieldsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning…';
+  sendToActiveTab({ type: 'SCAN_FIELDS' }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '🔍 Scan page for fields';
+    if (chrome.runtime.lastError) {
+      showToast('Open a DocuSign tab and try again', 'error');
+      return;
+    }
+    if (!response || !response.success || !response.fields || !response.fields.length) {
+      showToast('No fields found on this page', 'error');
+      return;
+    }
+    const columns = state.csvData.columns;
+    const mappings = [];
+    response.fields.forEach((f) => {
+      const label = f.fieldLabel || f.fieldKey || '';
+      let bestCol = '';
+      let bestScore = 0.3;
+      columns.forEach((col) => {
+        const score = scoreColumnMatch(label, col);
+        if (score > bestScore) { bestScore = score; bestCol = col; }
+      });
+      if (bestCol) {
+        mappings.push({ fieldKey: f.fieldKey, fieldLabel: f.fieldLabel || f.fieldKey, column: bestCol });
+      }
+    });
+    state.pendingMappings = mappings;
+    renderMappingsList();
+    const total = response.fields.length;
+    const matched = mappings.length;
+    showToast(`Scanned ${total} field(s), auto-mapped ${matched}. Add the rest with Start Capturing.`, matched ? 'success' : '');
+  });
 }
 
 function toggleCaptureMode() {

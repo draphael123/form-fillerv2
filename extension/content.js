@@ -49,6 +49,44 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: true });
     return true;
   }
+  if (message.type === 'SCAN_FIELDS') {
+    if (isTopFrame()) {
+      const allFields = getFieldsInDocument(document);
+      const iframes = document.querySelectorAll('iframe');
+      if (iframes.length === 0) {
+        sendResponse({ success: true, fields: allFields });
+        return true;
+      }
+      const results = [allFields];
+      let pending = iframes.length;
+      function onScanResult(ev) {
+        if (ev.data && ev.data.type === DOCUFILL_PREFIX + 'SCAN_RESULT') {
+          results.push(ev.data.fields || []);
+          pending--;
+          if (pending <= 0) finish();
+        }
+      }
+      function finish() {
+        window.removeEventListener('message', onScanResult);
+        const merged = [];
+        const seen = {};
+        results.forEach(function (arr) {
+          (arr || []).forEach(function (f) {
+            if (f.fieldKey && !seen[f.fieldKey]) { seen[f.fieldKey] = true; merged.push(f); }
+          });
+        });
+        sendResponse({ success: true, fields: merged });
+      }
+      window.addEventListener('message', onScanResult);
+      iframes.forEach(function (frame) {
+        try { frame.contentWindow.postMessage({ type: DOCUFILL_PREFIX + 'SCAN_FIELDS' }, '*'); } catch (e) { pending--; }
+      });
+      setTimeout(function () { if (pending > 0) { pending = 0; finish(); } }, 3000);
+    } else {
+      sendResponse({ success: true, fields: getFieldsInDocument(document) });
+    }
+    return true;
+  }
   if (message.type === 'RESTORE_FIELDS') {
     const restores = message.restores || [];
     let count = 0;
@@ -127,7 +165,29 @@ window.addEventListener('message', function (ev) {
       if (el) { try { setFieldValue(el, r.value); } catch (e) {} }
     });
   }
+  if (ev.data.type === DOCUFILL_PREFIX + 'SCAN_FIELDS') {
+    const fields = getFieldsInDocument(document);
+    try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'SCAN_RESULT', fields: fields }, '*'); } catch (e) {}
+  }
 });
+
+function getFieldsInDocument(doc) {
+  const seen = {};
+  const out = [];
+  const root = doc.body || doc.documentElement;
+  if (!root) return out;
+  const candidates = root.querySelectorAll('input, select, textarea, [contenteditable="true"], [role="textbox"], .ds-field, [data-testid*="field"]');
+  candidates.forEach(function (el) {
+    const inputEl = el.matches('input, select, textarea, [contenteditable="true"], [role="textbox"]') ? el : (el.querySelector('input, select, textarea') || (findInputElement(el) || el));
+    if (!inputEl || inputEl.tagName === 'INPUT' && (inputEl.type === 'hidden' || inputEl.type === 'submit' || inputEl.type === 'button' || inputEl.type === 'image')) return;
+    const info = extractFieldInfo(inputEl);
+    const key = info.key;
+    if (!key || seen[key]) return;
+    seen[key] = true;
+    out.push({ fieldKey: key, fieldLabel: (info.label || '').trim() || key });
+  });
+  return out;
+}
 
 function activateCaptureMode() {
   captureMode = true;
