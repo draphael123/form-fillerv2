@@ -331,8 +331,10 @@
   <nav class="nav-links" aria-label="Page sections">
     <a href="#how-it-works">How it works</a>
     <a href="#features">Features</a>
+    <a href="#demo">Try it</a>
     <a href="#install">Download</a>
     <a href="#usage">Usage</a>
+    <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
     <a href="#changelog">Changelog</a>
     <a href="#contact">Contact</a>
@@ -416,6 +418,51 @@
     <div class="feature-card"><div class="feature-icon">🔒</div><div class="feature-title">Fully local — no servers</div><div class="feature-desc">Your CSV never leaves your browser. All storage is in Chrome. Nothing is sent externally.</div></div>
     <div class="feature-card"><div class="feature-icon">📊</div><div class="feature-title">CSV & Excel support</div><div class="feature-desc">Works with .csv, .xlsx, and .xls. Columns are auto-detected.</div></div>
     <div class="feature-card"><div class="feature-icon">🖼️</div><div class="feature-title">Iframe-aware</div><div class="feature-desc">DocuSign uses iframes. DocuFill is injected at all frame levels so no field is missed.</div></div>
+  </div>
+</div>
+
+<div class="section reveal" id="demo" style="background:var(--white); border-top:2px solid var(--border);">
+  <div class="section-eyebrow">Interactive demo</div>
+  <h2 class="section-title">See how it works</h2>
+  <p class="section-sub">Try the flow in your browser. Load sample data, map fields, then fill — no installation required.</p>
+  <div id="demo-container" style="display:flex; gap:24px; margin-top:32px; flex-wrap:wrap; max-width:900px; margin-left:auto; margin-right:auto;">
+    <div id="demo-form" style="flex:1; min-width:280px; background:var(--blue-pale); border:2px solid var(--border); border-radius:16px; padding:24px;">
+      <div style="font-size:12px; font-weight:600; color:var(--blue); margin-bottom:16px;">Mock DocuSign form</div>
+      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Name</label><input type="text" id="demo-field-name" data-field="name" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Email</label><input type="text" id="demo-field-email" data-field="email" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+      <div><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Company</label><input type="text" id="demo-field-company" data-field="company" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+    </div>
+    <div id="demo-panel" style="flex:1; min-width:260px; background:var(--white); border:2px solid var(--border); border-radius:16px; padding:20px; box-shadow:var(--shadow);">
+      <div style="font-size:12px; font-weight:600; color:var(--blue); margin-bottom:12px;">DocuFill panel</div>
+      <div style="font-size:11px; color:var(--navy-muted); margin-bottom:12px;">Sample data loaded: 3 records</div>
+      <div style="margin-bottom:12px;"><label style="display:block; font-size:11px; margin-bottom:4px;">Record</label><select id="demo-record" style="width:100%; padding:8px; border:2px solid var(--border); border-radius:8px; font-size:13px;"><option value="0">Jane Doe</option><option value="1">John Smith</option><option value="2">Maria Garcia</option></select></div>
+      <button id="demo-fill-btn" style="width:100%; padding:12px; background:var(--blue); color:#fff; border:none; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer;">⚡ Fill</button>
+    </div>
+  </div>
+  <p style="margin-top:16px; font-size:13px; color:var(--navy-soft);">Fields are pre-mapped: Name→Name, Email→Email, Company→Company. Select a record and click Fill to see the mock form populate.</p>
+</div>
+
+<div class="section reveal" id="try-it" style="background:var(--blue-pale); border-top:2px solid var(--border);">
+  <div class="section-eyebrow">Try it</div>
+  <h2 class="section-title">Try DocuFill with sample data</h2>
+  <p class="section-sub">Download a sample CSV, install the extension, then open a DocuSign document and map fields. No account signup required.</p>
+  <a href="public/sample.csv" download="sample.csv" class="btn-download" style="display:inline-flex; margin-top:16px;">↓ Download sample.csv</a>
+  <p style="margin-top:16px; font-size:14px; color:var(--navy-muted);">The sample has columns: Name, Email, Company, Title. Install the extension, upload this file in the Data tab, then map and fill.</p>
+</div>
+
+<div class="section reveal" id="comparison" style="background:var(--blue-pale); border-top:2px solid var(--border);">
+  <div class="section-eyebrow">Why DocuFill</div>
+  <h2 class="section-title">vs. manual copy‑paste</h2>
+  <p class="section-sub">Stop switching tabs and retyping. DocuFill maps once, fills every time.</p>
+  <div class="steps" style="margin-top:32px;">
+    <div class="step">
+      <div class="step-title">Manual</div>
+      <div class="step-desc">Copy from CSV → switch tab → paste → repeat for each field and each record. Prone to typos and wrong fields.</div>
+    </div>
+    <div class="step">
+      <div class="step-title">DocuFill</div>
+      <div class="step-desc">Map fields once. Then select a record and click Fill. Every field fills correctly, every time.</div>
+    </div>
   </div>
 </div>
 
@@ -510,16 +557,23 @@
     <div class="changelog-item">
       <span class="changelog-date">Feb 2025</span>
       <div class="changelog-body">
-        <strong>Website (professional polish)</strong>
+        <strong>Extension</strong>
+        <ul>
+          <li>Undo last fill, default values, fill history</li>
+          <li>Settings: theme (dark/light/system), batch fill mode, default if empty, transform (uppercase/lowercase)</li>
+          <li>Reorder mappings (up/down), clone/rename templates, bulk import mappings CSV</li>
+          <li>Sample CSV button, conditional mapping, retry failed fields</li>
+        </ul>
+        <strong>Website</strong>
         <ul>
           <li>Navigation with anchor links (How it works, Features, Download, Usage, FAQ, Changelog, Contact)</li>
           <li>Hero visual mockup (extension-style card)</li>
           <li>“Who it’s for” line and system requirements (Chrome, DocuSign, no account)</li>
           <li>Trust line: No signup · No server uploads · Data stays in browser</li>
           <li>Footer with quick links, “We don’t collect your data,” and Last updated · v1.0.0</li>
-          <li>FAQ accordions (click to expand/collapse)</li>
-          <li>Subtle scroll-in animations for sections</li>
-          <li>OG image meta tag for link previews (add <code>/public/og.png</code> 1200×630 when ready)</li>
+          <li>Sample CSV download, interactive mock demo</li>
+          <li>Privacy &amp; security section, Why DocuFill comparison</li>
+          <li>FAQ accordions, scroll-in animations, navigation links</li>
         </ul>
         <strong>Previously</strong>
         <ul>
@@ -528,6 +582,17 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="section reveal" id="privacy" style="background:var(--blue-pale); border-top:2px solid var(--border);">
+  <div class="section-eyebrow">Privacy & security</div>
+  <h2 class="section-title">Your data stays yours</h2>
+  <p class="section-sub">DocuFill does not send your data to any server. No signup, no tracking, no cloud upload.</p>
+  <ul style="margin-top:20px; padding-left:24px; font-size:15px; color:var(--navy-muted); line-height:1.8;">
+    <li><strong style="color:var(--navy);">All data stays local</strong> — Your CSV and templates are stored in Chrome’s local storage on your device.</li>
+    <li><strong style="color:var(--navy);">No server uploads</strong> — Nothing is sent to DocuFill or any third party.</li>
+    <li><strong style="color:var(--navy);">Extension permissions</strong> — DocuFill only requests storage, active tab, and access to DocuSign domains. It cannot read other websites.</li>
+  </ul>
 </div>
 
 <div class="section faq-section reveal" id="faq">
@@ -592,7 +657,9 @@
   <div class="footer-links">
     <a href="#install">Download</a>
     <a href="#how-it-works">How it works</a>
+    <a href="#demo">Try it</a>
     <a href="#usage">Usage</a>
+    <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
     <a href="#changelog">Changelog</a>
     <a href="#contact">Contact</a>
@@ -604,7 +671,7 @@
     <span class="sep">·</span>
     <span>We don’t collect your data.</span>
     <span class="sep">·</span>
-    <span>Last updated Feb 2025 · v1.0.0</span>
+    <span>Last updated Feb 2025 · v1.2.0</span>
   </div>
 </footer>
 
@@ -660,6 +727,25 @@ document.getElementById('contact-form').addEventListener('submit', function(e) {
   window.addEventListener('scroll', reveal);
   window.addEventListener('load', reveal);
   reveal();
+})();
+
+(function() {
+  var demoData = [{ Name: 'Jane Doe', Email: 'jane@example.com', Company: 'Acme Inc' }, { Name: 'John Smith', Email: 'john@example.com', Company: 'Widget Co' }, { Name: 'Maria Garcia', Email: 'maria@example.com', Company: 'Tech Solutions' }];
+  var demoMapping = { name: 'Name', email: 'Email', company: 'Company' };
+  var recSelect = document.getElementById('demo-record');
+  var fillBtn = document.getElementById('demo-fill-btn');
+  if (fillBtn && recSelect) {
+    fillBtn.addEventListener('click', function() {
+      var idx = parseInt(recSelect.value, 10);
+      var r = demoData[idx] || {};
+      var nameEl = document.getElementById('demo-field-name');
+      var emailEl = document.getElementById('demo-field-email');
+      var companyEl = document.getElementById('demo-field-company');
+      if (nameEl) nameEl.value = r[demoMapping.name] || '';
+      if (emailEl) emailEl.value = r[demoMapping.email] || '';
+      if (companyEl) companyEl.value = r[demoMapping.company] || '';
+    });
+  }
 })();
 </script>
 

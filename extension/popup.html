@@ -240,6 +240,22 @@
       border-top-color: currentColor; border-radius: 50%;
       animation: spin 0.6s linear infinite;
     }
+
+    .record-progress { font-weight: normal; color: var(--text-dim); margin-left: 6px; }
+    .record-pagination { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 11px; color: var(--text-muted); }
+    .record-pagination button { padding: 2px 8px; font-size: 11px; }
+    .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 12px; }
+    .setting-row span { flex: 1; }
+    .setting-row select { width: 140px; flex-shrink: 0; }
+    .setting-check { cursor: pointer; }
+    .setting-check input { margin-right: 8px; }
+    .onboarding-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .onboarding-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; max-width: 320px; }
+    body.theme-light .onboarding-content { background: #fff; border-color: #e2e8f0; }
+
+    body.theme-light { --bg: #f8fafc; --surface: #fff; --surface2: #f1f5f9; --border: #e2e8f0; --text: #0f172a; --text-muted: #475569; --text-dim: #64748b; --accent-glow: rgba(37,99,235,0.15); }
+    body.theme-light .btn-primary { background: #2563eb; }
+    body.theme-light .fill-btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
   </style>
 </head>
 <body>
@@ -251,10 +267,12 @@
     <span class="header-version" id="headerVersion" style="font-size:10px; color:var(--text-dim); margin-left:4px;"></span>
   </div>
 
-  <div class="tabs">
-    <div class="tab active" data-tab="fill">Fill</div>
-    <div class="tab" data-tab="mapping">Mapping</div>
-    <div class="tab" data-tab="data">Data</div>
+  <div class="tabs" role="tablist">
+    <div class="tab active" data-tab="fill" role="tab" aria-selected="true" id="tab-fill-btn">Fill</div>
+    <div class="tab" data-tab="mapping" role="tab" aria-selected="false">Mapping</div>
+    <div class="tab" data-tab="data" role="tab" aria-selected="false">Data</div>
+    <div class="tab" data-tab="settings" role="tab" aria-selected="false" id="tab-settings-btn">Settings</div>
+    <div class="tab" data-tab="help" role="tab" aria-selected="false" id="tab-help-btn">Help</div>
   </div>
 
   <!-- FILL TAB -->
@@ -270,25 +288,37 @@
       <option value="">— Select a template —</option>
     </select>
 
-    <div class="section-label">Record</div>
+    <div class="section-label">Record <span id="recordProgress" class="record-progress"></span></div>
     <div class="record-selector">
       <div class="search-input-wrap" style="margin-bottom:6px;">
-        <span class="search-icon">⌕</span>
-        <input type="text" id="recordSearch" placeholder="Search by name, ID…" />
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input type="text" id="recordSearch" placeholder="Search by name, ID…" aria-label="Search records" />
       </div>
-      <select id="recordSelect" size="5" style="height:100px; padding:4px;">
-        <option value="">Load a CSV first</option>
-      </select>
+      <div id="recordPagination" class="record-pagination" style="display:none;"></div>
+      <select id="recordSelect" size="5" style="height:100px; padding:4px;" aria-label="Select record to fill"></select>
     </div>
+
+    <div id="previewBeforeFill" class="card" style="display:none; margin-bottom:8px;">
+      <div class="section-label">Preview (this record)</div>
+      <div id="previewList" style="font-size:11px; color:var(--text-muted); max-height:80px; overflow-y:auto;"></div>
+    </div>
+    <div id="emptyFieldsWarn" style="display:none; margin-bottom:8px; padding:8px; background:var(--warning); color:var(--bg); border-radius:var(--radius); font-size:11px;"></div>
 
     <div class="divider"></div>
     <div class="fill-btn-wrap">
-      <button class="fill-btn" id="fillBtn" disabled>⚡ Autofill Document</button>
+      <button class="fill-btn" id="fillBtn" disabled aria-label="Autofill document with selected record">⚡ Autofill Document</button>
     </div>
-    <button class="btn btn-secondary" id="fillNextBtn" style="margin-top:8px; width:100%;">Next record →</button>
+    <button class="btn btn-primary" id="fillAndNextBtn" style="margin-top:6px; width:100%;" disabled>⚡ Fill &amp; Next record</button>
+    <button class="btn btn-secondary" id="fillNextBtn" style="margin-top:6px; width:100%;">Next record →</button>
+    <div id="fillSummary" style="display:none; margin-top:8px; padding:8px; background:var(--surface2); border-radius:var(--radius); font-size:11px;"></div>
     <div id="fillErrors" style="display:none; margin-top:8px; padding:8px; background:var(--surface2); border-radius:var(--radius); font-size:11px; color:var(--text-muted);"></div>
-    <div style="margin-top:8px; text-align:center; font-size:11px; color:var(--text-dim)">
-      Navigate to a DocuSign document tab first
+    <button class="btn btn-secondary btn-sm" id="retryFailedBtn" style="display:none; margin-top:6px; width:100%;">Retry failed fields only</button>
+    <button class="btn btn-secondary" id="undoFillBtn" style="display:none; margin-top:6px; width:100%;">↩ Undo last fill</button>
+    <div id="staleTabHint" style="display:none; margin-top:8px; padding:8px; background:var(--warning); color:var(--bg); border-radius:var(--radius); font-size:11px;">Reload the DocuSign tab and try again.</div>
+    <div id="fillTabHint" style="margin-top:8px; text-align:center; font-size:11px; color:var(--text-dim)">Navigate to a DocuSign document tab first</div>
+    <div id="fillHistoryWrap" class="card" style="display:none; margin-top:12px;">
+      <div class="section-label">Recent fills</div>
+      <div id="fillHistoryList" style="font-size:11px; color:var(--text-muted); max-height:60px; overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -317,8 +347,17 @@
         <div class="field-tag" id="capturedFieldName">—</div>
       </div>
       <div class="section-label">Map to CSV Column</div>
-      <select id="columnSelect" style="margin-bottom:8px;">
+      <select id="columnSelect" style="margin-bottom:6px;">
         <option value="">— Select column —</option>
+      </select>
+      <div class="section-label" style="margin-top:6px;">Default if empty (optional)</div>
+      <input type="text" id="mappingDefaultInput" placeholder="e.g. N/A" style="margin-bottom:6px;" />
+      <div class="section-label">Transform (optional)</div>
+      <select id="mappingTransformSelect" style="margin-bottom:8px;">
+        <option value="">None</option>
+        <option value="uppercase">Uppercase</option>
+        <option value="lowercase">Lowercase</option>
+        <option value="trim">Trim</option>
       </select>
       <div class="row">
         <button class="btn btn-primary btn-sm" id="confirmMappingBtn">✓ Add Mapping</button>
@@ -348,6 +387,7 @@
       <div class="upload-text"><strong>Click to upload</strong> or drag & drop</div>
       <div class="upload-text" style="margin-top:4px;">.csv or .xlsx files</div>
     </div>
+    <button class="btn btn-secondary btn-sm" id="loadSampleCsvBtn" style="width:100%; margin-bottom:12px;">Load sample CSV</button>
     <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;" />
 
     <div id="sheetPicker" class="card" style="display:none; margin-bottom:12px;">
@@ -384,9 +424,11 @@
         <span id="templateBadge" style="font-size:10px; color:var(--text-dim);">0 saved</span>
         <button class="btn btn-secondary btn-sm" id="exportTemplatesBtn">Export</button>
         <button class="btn btn-secondary btn-sm" id="importTemplatesBtn">Import</button>
+        <button class="btn btn-secondary btn-sm" id="importMappingsCsvBtn" title="Import mappings from CSV (fieldKey,fieldLabel,column)">Import mappings CSV</button>
       </span>
     </div>
     <input type="file" id="importTemplatesInput" accept=".json,application/json" style="display:none;" />
+    <input type="file" id="importMappingsCsvInput" accept=".csv,text/csv" style="display:none;" />
     <div id="savedTemplatesList">
       <div class="empty-state" style="padding:16px;">
         <div class="empty-text">No templates saved yet</div>
@@ -394,7 +436,101 @@
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <!-- SETTINGS TAB -->
+  <div class="panel" id="tab-settings" role="tabpanel" aria-labelledby="tab-settings-btn">
+    <div class="section-label">Appearance</div>
+    <div class="card" style="margin-bottom:12px;">
+      <label class="setting-row">
+        <span>Theme</span>
+        <select id="settingTheme" aria-label="Theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">System</option>
+        </select>
+      </label>
+    </div>
+    <div class="section-label">Data</div>
+    <div class="card" style="margin-bottom:12px;">
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingTrimWhitespace" checked />
+        <span>Trim whitespace from CSV values before fill</span>
+      </label>
+      <label class="setting-row">
+        <span>Date format for date columns</span>
+        <select id="settingDateFormat" aria-label="Date format">
+          <option value="">As-is (no conversion)</option>
+          <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+          <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+          <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+        </select>
+      </label>
+      <label class="setting-row">
+        <span>CSV encoding</span>
+        <select id="settingEncoding" aria-label="CSV encoding">
+          <option value="utf-8">UTF-8</option>
+          <option value="utf-8-bom">UTF-8 with BOM</option>
+        </select>
+      </label>
+    </div>
+    <div class="section-label">Templates</div>
+    <div class="card" style="margin-bottom:12px;">
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingAutoLoadTemplate" />
+        <span>Auto-load template by URL pattern</span>
+      </label>
+      <div id="urlRulesWrap" style="display:none; margin-top:8px;">
+        <div class="section-label">URL → Template rules (one per line: pattern templateName)</div>
+        <textarea id="settingUrlRules" rows="4" placeholder="e.g. /envelope/  My Envelope Template" style="width:100%; padding:8px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-size:11px;"></textarea>
+      </div>
+    </div>
+    <div class="section-label">Warnings</div>
+    <div class="card">
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingWarnEmpty" checked />
+        <span>Warn when mapped column is empty for selected record</span>
+      </label>
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingShowPreview" checked />
+        <span>Show preview before fill</span>
+      </label>
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingBatchFillMode" />
+        <span>Batch mode: Fill button acts as Fill &amp; Next</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- HELP TAB -->
+  <div class="panel" id="tab-help" role="tabpanel" aria-labelledby="tab-help-btn">
+    <div class="card" style="margin-bottom:12px;">
+      <div class="section-label">First time?</div>
+      <ol style="font-size:12px; color:var(--text-muted); margin-left:16px; line-height:1.7;">
+        <li><strong style="color:var(--text);">Data tab</strong> — Upload your CSV or Excel file.</li>
+        <li><strong style="color:var(--text);">Mapping tab</strong> — Open a DocuSign document, click “Start Capturing Fields”, then click each field and choose the matching column.</li>
+        <li><strong style="color:var(--text);">Fill tab</strong> — Select template and record, then click Autofill.</li>
+      </ol>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="section-label">Shortcuts</div>
+      <ul style="font-size:11px; color:var(--text-muted); margin-left:16px; line-height:1.8;">
+        <li><kbd>Ctrl+Shift+F</kbd> (Mac: <kbd>⌘+Shift+F</kbd>) — Open DocuFill</li>
+        <li>With record list focused: <kbd>↑</kbd> <kbd>↓</kbd> to change record, <kbd>Enter</kbd> to fill</li>
+      </ul>
+    </div>
+    <a href="https://form-fillerv2.vercel.app/#usage" target="_blank" rel="noopener" class="btn btn-secondary" style="width:100%; margin-bottom:8px;">📖 Full guide on website</a>
+    <p style="font-size:11px; color:var(--text-dim);">You can open DocuFill in the side panel from the extension icon (right-click → Open in side panel).</p>
+  </div>
+
+  <!-- ONBOARDING OVERLAY -->
+  <div id="onboardingOverlay" class="onboarding-overlay" style="display:none;" role="dialog" aria-label="First time guide">
+    <div class="onboarding-content">
+      <h3 style="margin-bottom:8px;">Welcome to DocuFill</h3>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">1. Upload CSV/Excel in <strong>Data</strong> → 2. Map fields in <strong>Mapping</strong> (on a DocuSign page) → 3. <strong>Fill</strong> with one click.</p>
+      <button class="btn btn-primary" id="onboardingDismiss">Got it</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" aria-live="polite"></div>
   <script src="popup.js"></script>
 </body>
 </html>

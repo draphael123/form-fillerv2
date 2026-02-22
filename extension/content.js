@@ -36,14 +36,41 @@ function removeOverlay() {
 const DOCUFILL_PREFIX = '__docufill_';
 function isTopFrame() { try { return window.self === window.top; } catch (e) { return false; } }
 
+function getFieldValue(el) {
+  const tag = el.tagName.toLowerCase();
+  const type = (el.type || '').toLowerCase();
+  if (tag === 'select') return el.options[el.selectedIndex]?.value ?? '';
+  if (type === 'checkbox' || type === 'radio') return el.checked ? 'true' : 'false';
+  return el.value ?? '';
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PING') {
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (message.type === 'RESTORE_FIELDS') {
+    const restores = message.restores || [];
+    let count = 0;
+    restores.forEach(function (r) {
+      const el = findFieldByKey(r.fieldKey);
+      if (el) { try { setFieldValue(el, r.value); count++; } catch (e) {} }
+    });
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach(function (frame) {
+      try { frame.contentWindow.postMessage({ type: DOCUFILL_PREFIX + 'RESTORE', restores: restores }, '*'); } catch (e) {}
+    });
+    sendResponse({ success: true, count });
+    return true;
+  }
   if (message.type === 'CAPTURE_MODE_ON') activateCaptureMode();
   if (message.type === 'CAPTURE_MODE_OFF') deactivateCaptureMode();
   if (message.type === 'FILL_FIELDS') {
+    const mappings = message.mappings;
+    const record = message.record;
+    const failedKeysOnly = message.failedKeysOnly || null;
     if (isTopFrame()) {
-      const mappings = message.mappings;
-      const record = message.record;
-      const mainResult = fillFields(mappings, record);
+      const mainResult = fillFields(mappings, record, failedKeysOnly);
       const iframes = document.querySelectorAll('iframe');
       if (iframes.length === 0) {
         sendResponse(mainResult);
@@ -60,10 +87,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       function finish() {
         window.removeEventListener('message', onIframeResult);
-        const merged = { success: false, count: 0, errors: [], error: null };
+        const merged = { success: false, count: 0, errors: [], failedKeys: [], previousValues: [], error: null };
         results.forEach(function (r) {
           merged.count += r.count || 0;
           if (r.errors) merged.errors = merged.errors.concat(r.errors);
+          if (r.failedKeys) merged.failedKeys = merged.failedKeys.concat(r.failedKeys);
+          if (r.previousValues) merged.previousValues = merged.previousValues.concat(r.previousValues);
         });
         merged.success = merged.errors.length === 0 || merged.count > 0;
         merged.error = merged.errors[0] || null;
@@ -72,23 +101,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       window.addEventListener('message', onIframeResult);
       iframes.forEach(function (frame) {
         try {
-          frame.contentWindow.postMessage({ type: DOCUFILL_PREFIX + 'FILL', mappings: mappings, record: record }, '*');
+          frame.contentWindow.postMessage({ type: DOCUFILL_PREFIX + 'FILL', mappings: mappings, record: record, failedKeysOnly: failedKeysOnly }, '*');
         } catch (e) { pending--; }
       });
       setTimeout(function () {
         if (pending > 0) { pending = 0; finish(); }
       }, 500);
     } else {
-      sendResponse(fillFields(message.mappings, message.record));
+      sendResponse(fillFields(mappings, record, failedKeysOnly));
     }
   }
   return true;
 });
 
 window.addEventListener('message', function (ev) {
-  if (!ev.data || ev.data.type !== DOCUFILL_PREFIX + 'FILL') return;
-  const result = fillFields(ev.data.mappings || [], ev.data.record || {});
-  try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'FILL_RESULT', result: result }, '*'); } catch (e) {}
+  if (!ev.data) return;
+  if (ev.data.type === DOCUFILL_PREFIX + 'FILL') {
+    const result = fillFields(ev.data.mappings || [], ev.data.record || {}, ev.data.failedKeysOnly || null);
+    try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'FILL_RESULT', result: result }, '*'); } catch (e) {}
+  }
+  if (ev.data.type === DOCUFILL_PREFIX + 'RESTORE') {
+    const restores = ev.data.restores || [];
+    restores.forEach(function (r) {
+      const el = findFieldByKey(r.fieldKey);
+      if (el) { try { setFieldValue(el, r.value); } catch (e) {} }
+    });
+  }
 });
 
 function activateCaptureMode() {
@@ -145,18 +183,26 @@ function onClick(e) {
   setTimeout(() => { el.style.outline = el.__docufill_origOutline || ''; }, 800);
 }
 
-function fillFields(mappings, record) {
+function fillFields(mappings, record, failedKeysOnly) {
   let count = 0;
   const errors = [];
-  mappings.forEach((mapping) => {
-    const value = record[mapping.column];
+  const failedKeys = [];
+  const previousValues = [];
+  const toProcess = failedKeysOnly && failedKeysOnly.length
+    ? mappings.filter(m => failedKeysOnly.indexOf(m.fieldKey) >= 0)
+    : mappings;
+  toProcess.forEach((mapping) => {
+    let value = record[mapping.column];
     if (value === undefined || value === null) return;
     const el = findFieldByKey(mapping.fieldKey);
-    if (!el) { errors.push(`Field not found: ${mapping.fieldKey}`); return; }
-    try { setFieldValue(el, String(value)); count++; }
-    catch (err) { errors.push(`Failed to fill ${mapping.fieldKey}: ${err.message}`); }
+    if (!el) { errors.push('Field not found: ' + (mapping.fieldLabel || mapping.fieldKey)); failedKeys.push(mapping.fieldKey); return; }
+    try {
+      previousValues.push({ fieldKey: mapping.fieldKey, value: getFieldValue(el) });
+      setFieldValue(el, String(value));
+      count++;
+    } catch (err) { errors.push('Failed to fill ' + (mapping.fieldLabel || mapping.fieldKey) + ': ' + err.message); failedKeys.push(mapping.fieldKey); }
   });
-  return { success: errors.length === 0 || count > 0, count, errors, error: errors[0] || null };
+  return { success: errors.length === 0 || count > 0, count, errors, failedKeys, previousValues, error: errors[0] || null };
 }
 
 function setFieldValue(el, value) {
