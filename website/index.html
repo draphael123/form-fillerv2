@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- EXTENSION_BUILD: 2025-02-21T18:00:00 | Feb 21, 2025, 6:00 PM — update this and the two <time> elements when you rebuild the extension zip -->
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>DocuFill — DocuSign Autofill Extension</title>
-  <meta name="description" content="Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Chrome extension — no API keys, all data stays local."/>
-  <meta property="og:title" content="DocuFill — DocuSign Autofill Extension"/>
-  <meta property="og:description" content="Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Chrome extension — no API keys, all data stays local."/>
+  <title>DocuFill — Autofill DocuSign from CSV/Excel | Free Chrome Extension</title>
+  <meta name="description" content="Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Free Chrome extension — no API keys, data stays local."/>
+  <meta property="og:title" content="DocuFill — Autofill DocuSign from CSV/Excel | Free Chrome Extension"/>
+  <meta property="og:description" content="Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Free Chrome extension — no API keys, data stays local."/>
   <meta property="og:type" content="website"/>
   <meta property="og:image" content="/public/og.png"/>
   <!-- Add website/public/og.png (e.g. 1200x630) for social sharing previews -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"DocuFill","applicationCategory":"BrowserApplication","operatingSystem":"Chrome","description":"Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Free Chrome extension — no API keys, data stays local.","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
@@ -39,7 +43,20 @@
       display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
       padding: 18px 40px; background: var(--white); border-bottom: 2px solid var(--border);
       position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
+      transition: background 0.2s, box-shadow 0.2s;
     }
+    nav.nav-scrolled { background: rgba(255,255,255,0.96); backdrop-filter: saturate(180%) blur(8px); }
+    .nav-toggle {
+      display: none; flex-direction: column; justify-content: center; gap: 5px;
+      width: 40px; height: 40px; padding: 8px; background: none; border: 2px solid var(--border);
+      border-radius: 8px; cursor: pointer; transition: border-color 0.2s;
+    }
+    .nav-toggle:hover { border-color: var(--blue); }
+    .nav-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    .nav-toggle-bar { display: block; width: 100%; height: 2px; background: var(--navy); border-radius: 1px; transition: transform 0.2s, opacity 0.2s; }
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(2) { opacity: 0; }
+    .nav-toggle[aria-expanded="true"] .nav-toggle-bar:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     .nav-links {
       display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px;
       font-size: 14px; font-weight: 500; font-family: 'Outfit', sans-serif;
@@ -275,7 +292,8 @@
       width: 100%; padding: 12px 14px; border: 2px solid var(--border); border-radius: 10px;
       font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--navy);
     }
-    .form-group input:focus, .form-group textarea:focus {
+    .form-group input:focus, .form-group textarea:focus,
+    .form-group input:focus-visible, .form-group textarea:focus-visible {
       outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-light);
     }
     .form-group textarea { min-height: 140px; resize: vertical; }
@@ -317,7 +335,14 @@
     @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
     @media (max-width: 768px) {
       nav { padding: 14px 20px; }
-      .nav-links { display: none; }
+      .nav-toggle { display: flex; }
+      .nav-links {
+        display: none; width: 100%; flex-direction: column; order: 99; margin-top: 8px;
+        padding-top: 16px; border-top: 1px solid var(--border);
+      }
+      .nav-links.is-open { display: flex; }
+      .hero-actions { flex-direction: column; align-items: center; }
+      .hero-actions .extension-meta { width: 100%; text-align: center; }
       .section { padding: 60px 20px; }
       .install-section, .contact-section { padding: 60px 20px; }
       .stats .stat { border-right: none; border-bottom: 2px solid var(--border); max-width: none; }
@@ -330,6 +355,19 @@
     @media (min-width: 769px) {
       .nav-links { display: flex; }
     }
+    @media print {
+      body * { visibility: hidden; }
+      .install-section, .install-section * { visibility: visible; }
+      .install-section { position: absolute; left: 0; top: 0; width: 100%; }
+    }
+    body.theme-dark-site { --bg: #0f172a; --white: #1e293b; --navy: #f1f5f9; --navy-muted: #cbd5e1; --navy-soft: #94a3b8; --border: #334155; --shadow: 0 2px 12px rgba(0,0,0,0.3); }
+    body.theme-dark-site .section--how { background: #1e293b; }
+    body.theme-dark-site .section--features { background: #0f172a; }
+    body.theme-dark-site .install-section { background: #1e293b; }
+    body.theme-dark-site .changelog-section { background: #1e293b; }
+    body.theme-dark-site .contact-section { background: #1e293b; }
+    body.theme-dark-site nav { background: #1e293b; border-color: var(--border); }
+    body.theme-dark-site footer { background: #1e293b; border-color: var(--border); }
   </style>
 </head>
 <body id="top">
@@ -339,12 +377,13 @@
     <div class="nav-logo-mark">D</div>
     <span class="nav-name">DocuFill</span>
   </a>
-  <nav class="nav-links" aria-label="Page sections">
+  <button type="button" class="nav-toggle" id="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links"><span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span><span class="nav-toggle-bar"></span></button>
+  <nav class="nav-links" id="nav-links" aria-label="Page sections">
     <a href="#how-it-works">How it works</a>
     <a href="#features">Features</a>
+    <a href="#install">Download</a>
     <a href="#demo">Demo</a>
     <a href="#try-it">Sample CSV</a>
-    <a href="#install">Download</a>
     <a href="#usage">Usage</a>
     <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
@@ -361,16 +400,19 @@
     <span class="line2">Start filling.</span>
   </h1>
   <p class="hero-sub">Map your CSV columns to DocuSign fields once. Autofill any document in seconds — no copy-paste, no errors, no manual entry.</p>
-  <p class="hero-for">For legal, HR, and operations teams who send high-volume DocuSign envelopes.</p>
+  <p class="hero-outcome" style="font-size:16px; font-weight:600; color:var(--navy); margin-bottom:12px; animation:fadeUp 0.5s 0.16s ease both;">Map once, fill hundreds of envelopes in minutes.</p>
+  <p class="hero-for">For compliance, credentialing, legal, and operations teams who send high-volume DocuSign agreements.</p>
   <p class="hero-requirements">Free · No signup · Chrome only · Works with DocuSign eSignature · No account with us required.</p>
+  <p class="hero-works-with" style="font-size:13px; color:var(--navy-soft); margin-bottom:24px;">Works with <strong>DocuSign eSignature</strong> · <strong>Chrome</strong></p>
   <div class="hero-actions">
     <span id="download-wrap">
       <a class="btn-download" id="hero-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download Extension</a>
     </span>
-    <span style="align-self:center; font-size:14px; font-weight:600; color:var(--navy-muted);">v1.2.0</span>
+    <span class="extension-meta" style="align-self:center; font-size:13px; font-weight:600; color:var(--navy-muted);">v1.2.0 · Updated <time id="extension-updated-datetime" datetime="2025-02-21T18:00:00">Feb 21, 2025, 6:00 PM</time></span>
     <a class="btn-secondary-link" href="#install">How to download & install →</a>
   </div>
   <p class="hero-trust">No signup · No server uploads · Your data stays in your browser.</p>
+  <p class="hero-free" style="font-size:13px; font-weight:600; color:var(--blue); margin-top:8px;">Free forever. No account, no credit card.</p>
   <p class="hero-note" id="hero-note">Unzip the file, then load the folder in Chrome at <code>chrome://extensions</code> (Developer mode → Load unpacked).</p>
   <p class="download-fallback" id="download-fallback" aria-live="polite">If the download doesn’t start, use <strong>Load unpacked</strong> in Chrome and select the <code>extension/</code> folder from the repo. See install steps below.</p>
   <div class="hero-visual" aria-hidden="true">
@@ -390,6 +432,10 @@
   <div class="stat"><div class="stat-num" aria-hidden="true">~30s</div><div class="stat-label">to fill a full document</div></div>
   <div class="stat"><div class="stat-num" aria-hidden="true">0</div><div class="stat-label">copy-paste errors</div></div>
   <div class="stat"><div class="stat-num" aria-hidden="true">∞</div><div class="stat-label">reusable templates</div></div>
+</div>
+
+<div class="section reveal" style="padding:24px 40px; background:var(--white); border-bottom:2px solid var(--border);">
+  <p class="section-sub" style="margin:0; text-align:center;"><strong>System requirements:</strong> Chrome 88+ · Windows, Mac, or Linux · A DocuSign account (your own). No server uploads — data stays in your browser.</p>
 </div>
 
 <div id="how-it-works">
@@ -438,6 +484,7 @@
   <div class="section-eyebrow">Interactive demo</div>
   <h2 class="section-title">See how it works</h2>
   <p class="section-sub">Try the flow in your browser. Load sample data, map fields, then fill — no installation required.</p>
+  <p style="font-size:13px; color:var(--navy-soft); margin-top:8px;">This is a simulation. Install the extension to use it on real DocuSign documents.</p>
   <div id="demo-container" style="display:flex; gap:24px; margin-top:32px; flex-wrap:wrap; max-width:900px; margin-left:auto; margin-right:auto;">
     <div id="demo-form" style="flex:1; min-width:280px; background:var(--blue-pale); border:2px solid var(--border); border-radius:16px; padding:24px;">
       <div style="font-size:12px; font-weight:600; color:var(--blue); margin-bottom:16px;">Mock DocuSign form</div>
@@ -460,10 +507,10 @@
   <h2 class="section-title">Try DocuFill with sample data</h2>
   <p class="section-sub">Download a provider-compliance sample CSV, install the extension, then open a DocuSign provider agreement and map fields. No account signup required.</p>
   <p style="margin-top:16px;">
-    <a href="public/docufill_providers.csv" download="docufill_providers.csv" class="btn-download" style="display:inline-flex; margin-right:12px;">↓ docufill_providers.csv</a>
-    <a href="public/sample.csv" download="sample.csv" class="btn-secondary-link" style="display:inline-flex;">sample.csv</a>
+    <a href="public/docufill_providers.csv" download="docufill_providers.csv" class="btn-download" style="display:inline-flex; margin-right:12px;">↓ docufill_providers.csv</a> <span style="font-size:12px; font-weight:600; color:var(--blue);">Recommended</span>
+    <a href="public/sample.csv" download="sample.csv" class="btn-secondary-link" style="display:inline-flex; margin-left:8px;">sample.csv</a> <span style="font-size:12px; color:var(--navy-soft);">Alternative</span>
   </p>
-  <p style="margin-top:16px; font-size:14px; color:var(--navy-muted);">Columns: Provider Name, NPI, License Number, Email, Agreement Status. Install the extension, upload in the Data tab (or use the built-in sample), then map and fill.</p>
+  <p style="margin-top:16px; font-size:14px; color:var(--navy-muted);">Columns: Provider Name, NPI, License Number, Email, Agreement Status. Then install the extension and open a DocuSign tab to map and fill. Upload in the Data tab (or use the built-in sample) and you're ready.</p>
 </div>
 
 <div class="section reveal" id="comparison" style="background:var(--blue-pale); border-top:2px solid var(--border);">
@@ -482,7 +529,7 @@
   </div>
 </div>
 
-<div class="install-section section--center reveal" id="install">
+<div class="install-section section--center reveal" id="install" style="padding-top:100px;">
   <div class="install-inner">
     <div class="section-eyebrow">Download & install</div>
     <h2 class="section-title">How to get DocuFill</h2>
@@ -499,7 +546,7 @@
         <div class="install-step-num">2</div>
         <div class="install-step-text">
           <strong>Unzip the file</strong><br/>
-          <span>Locate the downloaded zip on your computer (usually in your Downloads folder). Right‑click it and choose <strong>Extract all</strong> (Windows) or double‑click to unzip (Mac). Save the extracted folder somewhere you’ll keep it (e.g. </span><span class="code-tag">Documents\DocuFill</span><span>). You’ll need this folder for the next step.</span>
+          <span>Locate the downloaded zip on your computer (usually in your Downloads folder). Right‑click it and choose <strong>Extract all</strong> (Windows) or double‑click to unzip (Mac). Save the extracted folder somewhere you’ll keep it (e.g. </span><span class="code-tag">Documents\DocuFill</span><span>). You’ll need this folder for the next step. <strong>Keep the folder</strong> — Chrome loads the extension from it, so don't delete it after installing.</span>
         </div>
       </div>
       <div class="install-step">
@@ -525,7 +572,9 @@
       </div>
     </div>
     <p class="install-after">You’re done. Open a DocuSign document, click the DocuFill icon in the toolbar, and follow the usage guide below to upload your data and fill forms.</p>
-    <p style="margin-bottom:12px;"><a class="btn-download" id="install-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download DocuFill</a> <span style="margin-left:12px; font-size:14px; font-weight:600; color:var(--navy-muted);">v1.2.0</span></p>
+    <p style="margin-bottom:8px;"><a class="btn-download" id="install-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download DocuFill</a> <span class="extension-meta" style="margin-left:12px; font-size:13px; font-weight:600; color:var(--navy-muted);">v1.2.0 · Updated <time id="extension-updated-datetime-install" datetime="2025-02-21T18:00:00">Feb 21, 2025, 6:00 PM</time></span></p>
+    <p style="font-size:13px; font-weight:600; color:var(--blue);">Free forever. No account, no credit card.</p>
+    <p style="margin-top:12px;"><button type="button" onclick="window.print();" class="btn-secondary-link" style="display:inline-flex; padding:10px 18px; cursor:pointer; border:2px solid var(--navy); border-radius:10px; background:transparent; font-family:inherit; font-size:14px;">Print install guide</button></p>
   </div>
 </div>
 
@@ -569,14 +618,31 @@
   <div class="section-eyebrow">Recent updates</div>
   <h2 class="section-title">Changelog</h2>
   <p class="section-sub">What's new on this site and in the extension.</p>
-  <p class="last-updated-line">Last updated: <span>February 21, 2025</span></p>
+  <p class="last-updated-line">Last updated: <span id="site-last-updated">February 23, 2025</span></p>
   <div class="changelog-list">
+    <div class="changelog-item">
+      <span class="changelog-date">Feb 22, 2025</span>
+      <div class="changelog-body">
+        <strong>Extension</strong>
+        <ul>
+          <li>Provider-compliance default data and first-use workflow (docufill_providers.csv).</li>
+          <li>Better capturing: Shadow DOM support, click-on-label resolves to field, improved nearby label detection, safer selectors.</li>
+          <li>Auto-map: synonym matching (e.g. Name↔Provider Name, License↔DOPL License), fallback match by field key.</li>
+          <li>Contenteditable fields now supported for fill.</li>
+        </ul>
+        <strong>Website</strong>
+        <ul>
+          <li>Try-it section and demo use provider sample; docufill_providers.csv download. Last updated date set to deploy day.</li>
+        </ul>
+      </div>
+    </div>
     <div class="changelog-item">
       <span class="changelog-date">Feb 21, 2025</span>
       <div class="changelog-body">
         <strong>Extension</strong>
         <ul>
           <li><strong>Default data</strong> — A sample CSV is now loaded automatically when you open the popup and haven't loaded a file yet, so you don't have to select one to get started.</li>
+          <li>Verify mappings on page, global Enter to fill (Fill tab), pre-select column when capturing a field, toast when some fields not found, clearer "Not on DocuSign" message, fallback key at fill (fieldLabel if fieldKey missing), date format for date-like field labels.</li>
         </ul>
         <strong>Website</strong>
         <ul>
@@ -665,6 +731,21 @@
         <div class="faq-a">Make sure you’ve turned on <strong>Start Capturing Fields</strong> in the Mapping tab first. You should see a blue banner on the DocuSign page saying “Click any field to capture it.” DocuSign often shows the document inside an iframe—DocuFill now enables capture in all frames, so clicks on fields in the document should register. If one still doesn’t, try <strong>Scan page for fields</strong> to discover and map fields automatically.</div>
       </div>
     </div>
+    <div class="faq-item">
+      <button type="button" aria-expanded="false" aria-controls="faq-a5" id="faq-q5" onclick="this.parentElement.classList.toggle('open'); this.setAttribute('aria-expanded', this.parentElement.classList.contains('open'));">
+        <span>Is there a keyboard shortcut to open DocuFill?</span>
+        <span class="faq-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div class="faq-a-wrap" id="faq-a5" role="region" aria-labelledby="faq-q5">
+        <div class="faq-a">Yes. You can open the DocuFill popup with <strong>Ctrl+Shift+F</strong> (Windows/Linux) or <strong>Cmd+Shift+F</strong> (Mac). You can change this in Chrome at <code>chrome://extensions/shortcuts</code>.</div>
+      </div>
+    </div>
+    <div class="section-eyebrow" style="margin-top:32px;">Troubleshooting</div>
+    <ul style="margin-top:12px; padding-left:24px; font-size:14px; color:var(--navy-muted); line-height:1.8;">
+      <li><strong style="color:var(--navy);">Extension icon grayed out or disabled</strong> — Open a tab with DocuSign (docusign.com or docusign.net) and click the DocuFill icon there. The extension only runs on DocuSign pages.</li>
+      <li><strong style="color:var(--navy);">Fields not filling</strong> — Use <strong>Verify mappings on page</strong> in the Mapping tab to check that each field exists. If the document layout changed, re-capture or re-scan fields.</li>
+      <li><strong style="color:var(--navy);">Download didn’t start</strong> — Use <strong>Load unpacked</strong> in Chrome: go to <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked, and select the folder you extracted from the zip.</li>
+    </ul>
   </div>
 </div>
 
@@ -673,7 +754,7 @@
     <div class="section-eyebrow">Suggestions</div>
     <h2 class="section-title">Send us your ideas</h2>
     <p class="section-sub">Have a feature request or feedback? Fill out the form below. Your message will be sent to daniel@fountain.net.</p>
-    <form class="contact-form" id="contact-form" action="#" method="get" aria-label="Contact form for suggestions">
+    <form class="contact-form" id="contact-form" action="#" method="get" aria-label="Contact form for suggestions" aria-describedby="contact-note">
       <div class="form-group">
         <label for="contact-name">Your name</label>
         <input type="text" id="contact-name" name="name" placeholder="e.g. Jane Smith" required/>
@@ -688,7 +769,7 @@
       </div>
       <button type="submit" class="btn-submit">Send suggestion</button>
     </form>
-    <p class="contact-note">Submitting opens your email client with your message addressed to daniel@fountain.net. You can edit the email before sending.</p>
+    <p class="contact-note" id="contact-note">Submitting opens your email client with your message addressed to daniel@fountain.net. You can edit the email before sending.</p>
   </div>
 </div>
 
@@ -711,11 +792,25 @@
     <span class="sep">·</span>
     <span>We don’t collect your data.</span>
     <span class="sep">·</span>
-    <span>Last updated Feb 21, 2025 · v1.2.0</span>
+    <span>Last updated <span id="footer-last-updated">Feb 23, 2025</span> · v1.2.0</span>
+    <span class="sep">·</span>
+    <button type="button" id="theme-toggle-site" style="background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;text-decoration:underline;padding:0;">Dark mode</button>
   </div>
 </footer>
 
 <script>
+(function() {
+  // Set "Last updated" from page deploy time (updates automatically when site is redeployed)
+  var lastMod = new Date(document.lastModified);
+  if (!isNaN(lastMod.getTime())) {
+    var longDate = lastMod.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    var shortDate = lastMod.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    var elChangelog = document.getElementById('site-last-updated');
+    var elFooter = document.getElementById('footer-last-updated');
+    if (elChangelog) elChangelog.textContent = longDate;
+    if (elFooter) elFooter.textContent = shortDate;
+  }
+})();
 (function() {
   var zipUrl = 'public/docufill-extension.zip';
   function checkZip() {
@@ -756,6 +851,32 @@ document.getElementById('contact-form').addEventListener('submit', function(e) {
 });
 
 (function() {
+  var nav = document.querySelector('nav');
+  var toggle = document.getElementById('nav-toggle');
+  var links = document.getElementById('nav-links');
+  if (toggle && links) {
+    toggle.addEventListener('click', function() {
+      var open = links.classList.toggle('is-open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    });
+    links.querySelectorAll('a').forEach(function(a) {
+      a.addEventListener('click', function() {
+        links.classList.remove('is-open');
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-label', 'Open menu');
+      });
+    });
+  }
+  function onScroll() {
+    if (nav && window.scrollY > 40) nav.classList.add('nav-scrolled');
+    else if (nav) nav.classList.remove('nav-scrolled');
+  }
+  window.addEventListener('scroll', onScroll);
+  onScroll();
+})();
+
+(function() {
   var reveals = document.querySelectorAll('.reveal');
   function reveal() {
     reveals.forEach(function(el) {
@@ -767,6 +888,21 @@ document.getElementById('contact-form').addEventListener('submit', function(e) {
   window.addEventListener('scroll', reveal);
   window.addEventListener('load', reveal);
   reveal();
+})();
+
+(function() {
+  var btn = document.getElementById('theme-toggle-site');
+  if (btn) {
+    var dark = localStorage.getItem('docufill-site-dark') === '1';
+    if (dark) document.body.classList.add('theme-dark-site');
+    btn.textContent = dark ? 'Light mode' : 'Dark mode';
+    btn.addEventListener('click', function() {
+      document.body.classList.toggle('theme-dark-site');
+      var isDark = document.body.classList.contains('theme-dark-site');
+      localStorage.setItem('docufill-site-dark', isDark ? '1' : '0');
+      btn.textContent = isDark ? 'Light mode' : 'Dark mode';
+    });
+  }
 })();
 
 (function() {

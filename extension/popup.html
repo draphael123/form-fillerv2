@@ -83,6 +83,9 @@
       padding: 12px;
       margin-bottom: 12px;
     }
+    .health-label { color: var(--text-dim); }
+    .health-ok { color: var(--success); }
+    .health-no { color: var(--text-dim); }
 
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -264,6 +267,7 @@
     <div class="logo">D</div>
     <span class="header-title">DocuFill</span>
     <span class="header-sub" id="pageStatus">Not on DocuSign</span>
+    <button type="button" id="refreshConnectionBtn" class="btn btn-secondary btn-sm" style="margin-left:6px; padding:4px 8px; font-size:10px;" title="Check connection to DocuSign tab">↻ Refresh</button>
     <span class="header-version" id="headerVersion" style="font-size:10px; color:var(--text-dim); margin-left:4px;"></span>
   </div>
 
@@ -281,6 +285,26 @@
       <div class="csv-dot" id="csvDot"></div>
       <span class="csv-name" id="csvName">No file loaded</span>
       <span class="csv-count" id="csvCount"></span>
+    </div>
+
+    <div id="healthCheck" class="card" style="margin-bottom:12px; padding:10px 12px;">
+      <div class="section-label" style="margin-bottom:6px;">Status</div>
+      <div id="healthCheckList" style="font-size:11px; display:grid; gap:4px;">
+        <div><span class="health-label">DocuSign tab:</span> <span id="healthDocuSignVal">—</span></div>
+        <div><span class="health-label">Content script:</span> <span id="healthScriptVal">—</span></div>
+        <div><span class="health-label">Data:</span> <span id="healthDataVal">—</span></div>
+        <div><span class="health-label">Template:</span> <span id="healthTemplateVal">—</span></div>
+        <div><span class="health-label">Mappings:</span> <span id="healthMappingsVal">—</span></div>
+        <div><span class="health-label">Record:</span> <span id="healthRecordVal">—</span></div>
+        <div><span class="health-label">Empty fields (this record):</span> <span id="healthEmptyVal">—</span></div>
+        <div><span class="health-label">Template columns in CSV:</span> <span id="healthColumnsVal">—</span></div>
+        <div><span class="health-label">DocuSign tabs open:</span> <span id="healthTabsVal">—</span></div>
+        <div><span class="health-label">Last fill:</span> <span id="healthLastFillVal">—</span></div>
+        <div><span class="health-label">Last verify:</span> <span id="healthVerifyVal">—</span></div>
+        <div><span class="health-label">CSV cols not in template:</span> <span id="healthUnmappedVal">—</span></div>
+        <div><span class="health-label">Extension:</span> <span id="healthVersionVal">—</span></div>
+        <div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border);"><span class="health-label">Ready to fill:</span> <span id="healthReadyVal">—</span></div>
+      </div>
     </div>
 
     <div class="section-label">Template</div>
@@ -314,11 +338,14 @@
       <button class="fill-btn" id="fillBtn" disabled aria-label="Autofill document with selected record">⚡ Autofill Document</button>
     </div>
     <button class="btn btn-primary" id="fillAndNextBtn" style="margin-top:6px; width:100%;" disabled>⚡ Fill &amp; Next record</button>
+    <button class="btn btn-secondary" id="fillAllBatchBtn" style="margin-top:6px; width:100%;" disabled>⚡ Fill all (batch)</button>
     <button class="btn btn-secondary" id="fillNextBtn" style="margin-top:6px; width:100%;">Next record →</button>
     <div id="fillSummary" style="display:none; margin-top:8px; padding:8px; background:var(--surface2); border-radius:var(--radius); font-size:11px;"></div>
+    <button class="btn btn-secondary btn-sm" id="copyFillSummaryBtn" style="display:none; margin-top:4px; width:100%;">📋 Copy fill summary</button>
     <div id="fillErrors" style="display:none; margin-top:8px; padding:8px; background:var(--surface2); border-radius:var(--radius); font-size:11px; color:var(--text-muted);"></div>
     <button class="btn btn-secondary btn-sm" id="retryFailedBtn" style="display:none; margin-top:6px; width:100%;">Retry failed fields only</button>
     <button class="btn btn-secondary" id="undoFillBtn" style="display:none; margin-top:6px; width:100%;">↩ Undo last fill</button>
+    <button class="btn btn-secondary btn-sm" id="duplicateRecordBtn" style="margin-top:6px; width:100%;">📄 Duplicate this record</button>
     <div id="staleTabHint" style="display:none; margin-top:8px; padding:8px; background:var(--warning); color:var(--bg); border-radius:var(--radius); font-size:11px;">Reload the DocuSign tab and try again.</div>
     <div id="fillTabHint" style="margin-top:8px; text-align:center; font-size:11px; color:var(--text-dim)">Navigate to a DocuSign document tab first</div>
     <div id="fillHistoryWrap" class="card" style="display:none; margin-top:12px;">
@@ -342,6 +369,7 @@
       <button class="btn btn-secondary btn-sm" id="loadTemplateBtn">Load</button>
     </div>
 
+    <button class="btn btn-secondary btn-sm" id="loadPresetProviderBtn" style="margin-bottom:8px; width:100%;">Load preset: Provider compliance</button>
     <button class="btn btn-primary" id="scanFieldsBtn" style="margin-bottom:8px;">🔍 Scan page for fields</button>
     <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Finds all form fields and matches them to your CSV columns by name.</p>
     <button class="btn btn-secondary" id="captureModeBtn" style="margin-bottom:12px;">
@@ -379,10 +407,11 @@
     <div id="mappingsList">
       <div class="empty-state">
         <div class="empty-icon">↔️</div>
-        <div class="empty-text">No mappings yet.<br>Capture fields to build your template.</div>
+        <div class="empty-text">No mappings yet.<br>Use <strong>Scan page for fields</strong> to auto-detect, or <strong>Start Capturing Fields</strong> and click each field.</div>
       </div>
     </div>
 
+    <button class="btn btn-secondary btn-sm" id="verifyMappingsBtn" style="margin-top:8px; width:100%;">✓ Verify mappings on page</button>
     <div class="divider"></div>
     <button class="btn btn-primary" id="saveTemplateBtn">💾 Save Template</button>
   </div>
@@ -395,7 +424,8 @@
       <div class="upload-text"><strong>Click to upload</strong> or drag & drop</div>
       <div class="upload-text" style="margin-top:4px;">.csv or .xlsx files</div>
     </div>
-    <button class="btn btn-secondary btn-sm" id="loadSampleCsvBtn" style="width:100%; margin-bottom:12px;">Load sample CSV</button>
+    <button class="btn btn-secondary btn-sm" id="loadSampleCsvBtn" style="width:100%; margin-bottom:6px;">Load sample CSV</button>
+    <button class="btn btn-secondary btn-sm" id="pasteCsvBtn" style="width:100%; margin-bottom:12px;">📋 Paste CSV from clipboard</button>
     <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;" />
 
     <div id="sheetPicker" class="card" style="display:none; margin-bottom:12px;">
@@ -504,6 +534,10 @@
       <label class="setting-row setting-check">
         <input type="checkbox" id="settingBatchFillMode" />
         <span>Batch mode: Fill button acts as Fill &amp; Next</span>
+      </label>
+      <label class="setting-row setting-check">
+        <input type="checkbox" id="settingSwitchTabAfterFill" />
+        <span>Switch to next browser tab after Fill &amp; Next</span>
       </label>
     </div>
   </div>

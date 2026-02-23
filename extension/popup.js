@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS = {
   warnEmpty: true,
   showPreview: true,
   batchFillMode: false,
+  switchTabAfterFill: false,
 };
 
 const RECORD_PAGE_SIZE = 50;
@@ -76,6 +77,8 @@ let state = {
   // UI & environment
   isOnDocuSign: false,
   contentScriptReady: false,
+  docuSignTabCount: 0,
+  lastVerifyResult: null,
   onboardingDismissed: false,
   settings: { ...DEFAULT_SETTINGS },
 };
@@ -168,7 +171,8 @@ function getRecordValue(record, column, mapping) {
     else if (mapping.transform === 'trim') val = val.trim();
   }
 
-  if (state.settings.dateFormat && /date|dob|birth|year/i.test(column)) {
+  const dateLike = (s) => /date|dob|birth|year|effective|expir|signed/i.test(String(s || ''));
+  if (state.settings.dateFormat && (dateLike(column) || (mapping && dateLike(mapping.fieldLabel)))) {
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
       const pad = (n) => String(n).padStart(2, '0');
@@ -304,7 +308,28 @@ async function loadFromStorage() {
 
       updateFillButton();
       refreshSettingsUI();
-      resolve();
+
+      // Auto-load template by URL pattern
+      if (state.settings.autoLoadTemplate && state.settings.urlRules && Object.keys(state.templates).length > 0) {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          const url = (tabs[0] && tabs[0].url) || '';
+          const lines = state.settings.urlRules.split('\n').map((l) => l.trim()).filter(Boolean);
+          for (const line of lines) {
+            const parts = line.split(/\s+/);
+            const pattern = parts[0];
+            const templateName = parts.slice(1).join(' ').trim();
+            if (pattern && templateName && state.templates[templateName] && url.indexOf(pattern) >= 0) {
+              const sel = $('templateSelect');
+              if (sel) sel.value = templateName;
+              saveToStorage();
+              break;
+            }
+          }
+          resolve();
+        });
+      } else {
+        resolve();
+      }
     });
   });
 }
@@ -364,6 +389,7 @@ function refreshSettingsUI() {
   setChecked('settingWarnEmpty', s.warnEmpty !== false);
   setChecked('settingShowPreview', s.showPreview !== false);
   setChecked('settingBatchFillMode', !!s.batchFillMode);
+  setChecked('settingSwitchTabAfterFill', !!s.switchTabAfterFill);
 
   const wrap = $('urlRulesWrap');
   const autoEl = $('settingAutoLoadTemplate');
@@ -374,7 +400,7 @@ function setupSettingsTab() {
   const settingIds = [
     'settingTheme', 'settingTrimWhitespace', 'settingDateFormat',
     'settingEncoding', 'settingAutoLoadTemplate', 'settingUrlRules',
-    'settingWarnEmpty', 'settingShowPreview', 'settingBatchFillMode',
+    'settingWarnEmpty', 'settingShowPreview', 'settingBatchFillMode', 'settingSwitchTabAfterFill',
   ];
 
   function saveSettings() {
@@ -388,6 +414,7 @@ function setupSettingsTab() {
       warnEmpty: $('settingWarnEmpty')?.checked !== false,
       showPreview: $('settingShowPreview')?.checked !== false,
       batchFillMode: $('settingBatchFillMode')?.checked || false,
+      switchTabAfterFill: $('settingSwitchTabAfterFill')?.checked || false,
     };
     applyTheme(state.settings.theme);
     $('urlRulesWrap').style.display = state.settings.autoLoadTemplate ? 'block' : 'none';
@@ -488,6 +515,27 @@ function setupDataTab() {
     e.target.value = '';
   });
   $('loadSampleCsvBtn').addEventListener('click', loadSampleCsv);
+  $('pasteCsvBtn').addEventListener('click', pasteCsvFromClipboard);
+}
+
+async function pasteCsvFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || !text.trim()) {
+      showToast('Clipboard is empty', 'error');
+      return;
+    }
+    showToast('Pasting…');
+    const parsed = parseCSV(text);
+    state.csvData = { name: 'Pasted', columns: parsed.columns, rows: parsed.rows };
+    state.filteredIndices = null;
+    state.filledRecordIndices = [];
+    saveToStorage();
+    refreshAll();
+    showToast('Pasted ' + parsed.rows.length + ' row(s)', 'success');
+  } catch (e) {
+    showToast('Paste failed — try pasting into a text field first', 'error');
+  }
 }
 
 // ── File handling ───────────────────────────────────────
@@ -878,8 +926,54 @@ function setupMappingTab() {
   $('confirmMappingBtn').addEventListener('click', confirmMapping);
   $('cancelCaptureBtn').addEventListener('click', cancelCapture);
   $('saveTemplateBtn').addEventListener('click', saveTemplate);
+  $('verifyMappingsBtn').addEventListener('click', verifyMappingsOnPage);
+  $('loadPresetProviderBtn').addEventListener('click', loadPresetProviderCompliance);
   $('newTemplateBtn').addEventListener('click', newTemplate);
   $('loadTemplateBtn').addEventListener('click', loadTemplateIntoEditor);
+}
+
+function loadPresetProviderCompliance() {
+  const cols = ['Provider Name', 'NPI', 'License Number', 'Email', 'Agreement Status'];
+  const existing = state.pendingMappings.length;
+  cols.forEach((name) => {
+    if (state.pendingMappings.some((m) => (m.fieldKey || m.fieldLabel) === name)) return;
+    state.pendingMappings.push({ fieldKey: name, fieldLabel: name, column: (state.csvData && state.csvData.columns.includes(name)) ? name : (state.csvData && state.csvData.columns[0]) || '' });
+  });
+  if (state.csvData) {
+    state.pendingMappings.forEach((m) => {
+      if (!state.csvData.columns.includes(m.column) && state.csvData.columns.length) m.column = state.csvData.columns[0];
+    });
+  }
+  refreshColumnDropdowns();
+  renderMappingsList();
+  showToast('Preset loaded — assign columns if needed');
+}
+
+function verifyMappingsOnPage() {
+  const fieldKeys = (state.pendingMappings || []).map((m) => m.fieldKey).filter(Boolean);
+  if (!fieldKeys.length) {
+    showToast('No mappings to verify — add mappings first', 'error');
+    return;
+  }
+  sendToActiveTab({ type: 'VERIFY_MAPPINGS', fieldKeys }, (response) => {
+    if (chrome.runtime.lastError) {
+      showToast('Open a DocuSign tab and try again', 'error');
+      return;
+    }
+    if (!response || !response.success) {
+      showToast('Verification failed', 'error');
+      return;
+    }
+    const missing = response.missing || [];
+    if (missing.length === 0) {
+      showToast('All ' + fieldKeys.length + ' mapping(s) found on page', 'success');
+    } else {
+      const labels = state.pendingMappings.filter((m) => missing.indexOf(m.fieldKey) >= 0).map((m) => m.fieldLabel || m.fieldKey);
+      showToast(missing.length + ' not on page: ' + labels.slice(0, 3).join(', ') + (labels.length > 3 ? '…' : ''), 'error');
+    }
+    state.lastVerifyResult = { missing: response.missing || [], found: response.found || [] };
+    refreshHealthCheck();
+  });
 }
 
 function scanPageForFields() {
@@ -1017,15 +1111,22 @@ function renderMappingsList() {
     return;
   }
 
+  const sampleForColumn = (col) => {
+    if (!state.csvData || !state.csvData.rows.length) return '';
+    const vals = state.csvData.rows.slice(0, 3).map((r) => String(r[col] ?? '').slice(0, 20));
+    return vals.join(', ');
+  };
+
   list.innerHTML = state.pendingMappings
     .map((m, i) => {
       const defTag = m.default ? ' [def:' + escapeHtml(m.default) + ']' : '';
       const transTag = m.transform ? ' [' + escapeHtml(m.transform) + ']' : '';
+      const colTitle = escapeHtml(m.fieldKey) + (m.column ? ' → sample: ' + escapeHtml(sampleForColumn(m.column)) : '');
       return `
         <div class="mapping-row" style="grid-template-columns:1fr 24px 1fr 28px 24px 24px;">
           <div class="field-tag" title="${escapeHtml(m.fieldKey)}">${escapeHtml(m.fieldLabel || m.fieldKey)}</div>
           <div class="mapping-arrow">→</div>
-          <div class="field-tag" style="color:var(--accent);">${escapeHtml(m.column)}${m.confidence != null ? confidenceBadge(m.confidence) : ''}${defTag}${transTag}</div>
+          <div class="field-tag" style="color:var(--accent);" title="${colTitle}">${escapeHtml(m.column)}${m.confidence != null ? confidenceBadge(m.confidence) : ''}${defTag}${transTag}</div>
           <button class="remove-btn" data-index="${i}" title="Remove">×</button>
           <button class="remove-btn" data-move-up="${i}" title="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
           <button class="remove-btn" data-move-down="${i}" title="Move down" ${i === state.pendingMappings.length - 1 ? 'disabled' : ''}>↓</button>
@@ -1108,9 +1209,28 @@ function setupFillTab() {
 
   $('fillBtn').addEventListener('click', () => triggerFill(state.settings.batchFillMode));
   $('fillAndNextBtn').addEventListener('click', () => triggerFill(true));
+  $('fillAllBatchBtn').addEventListener('click', fillAllBatch);
   $('fillNextBtn').addEventListener('click', fillNextRecord);
   $('retryFailedBtn').addEventListener('click', () => triggerFill(false, true));
   $('undoFillBtn').addEventListener('click', undoLastFill);
+  $('duplicateRecordBtn').addEventListener('click', duplicateCurrentRecord);
+  $('copyFillSummaryBtn').addEventListener('click', copyFillSummaryToClipboard);
+  $('refreshConnectionBtn').addEventListener('click', refreshConnection);
+
+  // Global Enter to fill when Fill tab is active (and not typing in an input)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const panel = document.querySelector('.panel.active');
+    if (!panel || panel.id !== 'tab-fill') return;
+    const t = e.target;
+    const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+    if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+    const sel = $('recordSelect');
+    if (sel && (t === sel || sel.contains(t))) return; // record list has its own Enter handler
+    if ($('fillBtn').disabled) return;
+    e.preventDefault();
+    triggerFill(false);
+  });
 
   // Keyboard navigation in record list
   $('recordSelect').addEventListener('keydown', (e) => {
@@ -1152,6 +1272,9 @@ function updateFillButton() {
   $('fillBtn').disabled = !ready;
   const fillAndNext = $('fillAndNextBtn');
   if (fillAndNext) fillAndNext.disabled = !ready;
+  const fillAllBatch = $('fillAllBatchBtn');
+  if (fillAllBatch) fillAllBatch.disabled = !ready || !state.csvData || state.csvData.rows.length === 0;
+  refreshHealthCheck();
 }
 
 function updatePreviewAndWarnings() {
@@ -1203,14 +1326,16 @@ function updatePreviewAndWarnings() {
 
 // ── Fill execution ──────────────────────────────────────
 
-function triggerFill(fillAndNext, retryFailedOnly) {
+function triggerFill(fillAndNext, retryFailedOnly, onComplete) {
   const templateName = $('templateSelect').value;
   if (!templateName || !state.templates[templateName]) {
     showToast('Select a template first', 'error');
+    if (onComplete) onComplete();
     return;
   }
   if (state.selectedRecord === null || !state.csvData) {
     showToast('Select a record first', 'error');
+    if (onComplete) onComplete();
     return;
   }
 
@@ -1231,11 +1356,14 @@ function triggerFill(fillAndNext, retryFailedOnly) {
 
   $('fillBtn').disabled = true;
   $('fillAndNextBtn').disabled = true;
+  const fillAllBatchBtn = $('fillAllBatchBtn');
+  if (fillAllBatchBtn) fillAllBatchBtn.disabled = true;
   $('fillBtn').innerHTML = '<div class="spinner"></div> Filling…';
 
   sendToActiveTab({ type: 'FILL_FIELDS', mappings, record: displayRecord, failedKeysOnly }, (response) => {
     $('fillBtn').disabled = false;
     $('fillBtn').textContent = '⚡ Autofill Document';
+    if (fillAllBatchBtn) fillAllBatchBtn.disabled = !(state.templates[templateName] && state.selectedRecord !== null && state.csvData && state.isOnDocuSign);
     updateFillButton();
 
     const errEl = $('fillErrors');
@@ -1243,9 +1371,11 @@ function triggerFill(fillAndNext, retryFailedOnly) {
     const retryBtn = $('retryFailedBtn');
     const staleHint = $('staleTabHint');
     const fillTabHint = $('fillTabHint');
+    const copySummaryBtn = $('copyFillSummaryBtn');
 
     if (errEl) errEl.style.display = 'none';
     if (summaryEl) summaryEl.style.display = 'none';
+    if (copySummaryBtn) copySummaryBtn.style.display = 'none';
     if (retryBtn) retryBtn.style.display = 'none';
     if (staleHint) staleHint.style.display = 'none';
     if (fillTabHint && state.isOnDocuSign) fillTabHint.style.display = 'none';
@@ -1254,15 +1384,19 @@ function triggerFill(fillAndNext, retryFailedOnly) {
       showToast('Reload the DocuSign tab and try again', 'error');
       if (staleHint) staleHint.style.display = 'block';
       if (fillTabHint) fillTabHint.style.display = 'block';
+      if (onComplete) onComplete();
       return;
     }
 
-    // Store result for undo/retry
+    // Store result for undo/retry and copy summary
     state.lastFillResult = response
       ? { count: response.count, errors: response.errors || [], failedKeys: response.failedKeys || [] }
       : null;
     state.lastRestoreData =
       response?.previousValues?.length ? response.previousValues : null;
+    state.lastFillSummary = response && state.csvData && state.selectedRecord != null
+      ? { templateName, recordIndex: state.selectedRecord, count: response.count, recordLabel: String(state.csvData.rows[state.selectedRecord][state.csvData.columns[0]] || 'Record ' + (state.selectedRecord + 1)) }
+      : null;
 
     const undoBtn = $('undoFillBtn');
     if (undoBtn) undoBtn.style.display = state.lastRestoreData ? 'block' : 'none';
@@ -1280,15 +1414,36 @@ function triggerFill(fillAndNext, retryFailedOnly) {
     }
 
     // Display results
-    if (response && response.success) {
+    if (response && response.failedKeys && response.failedKeys.length > 0) {
+      showToast(response.count > 0
+        ? `${response.count} filled, ${response.failedKeys.length} field(s) not found — check Mapping`
+        : `${response.failedKeys.length} field(s) not found — re-capture in Mapping tab`, 'error');
+    } else if (response && response.success) {
       showToast(`Filled ${response.count} field(s)`, 'success');
+    }
+    if (response && response.success) {
       renderFillSummary(summaryEl, errEl, retryBtn, response);
-      if (fillAndNext || state.settings.batchFillMode) fillNextRecord();
-    } else {
-      const msg = response?.error || 'Fill failed — check console';
-      showToast(msg, 'error');
+      if (copySummaryBtn && state.lastFillSummary) copySummaryBtn.style.display = 'block';
+      if (fillAndNext || state.settings.batchFillMode) {
+        if (state.settings.switchTabAfterFill && fillAndNext) {
+          chrome.tabs.query({ currentWindow: true }, (tabs) => {
+            const current = tabs.find((t) => t.active);
+            if (current) {
+              const idx = tabs.findIndex((t) => t.id === current.id);
+              const next = tabs[idx + 1];
+              if (next) chrome.tabs.update(next.id, { active: true });
+            }
+          });
+        }
+        fillNextRecord();
+      }
+    } else if (!response || !response.success) {
+      if (!response || !response.failedKeys || response.failedKeys.length === 0) {
+        showToast(response?.error || 'Fill failed — check console', 'error');
+      }
       renderFillErrors(errEl, retryBtn, response);
     }
+    if (onComplete) onComplete();
   });
 }
 
@@ -1368,6 +1523,73 @@ function undoLastFill() {
   });
 }
 
+function refreshConnection() {
+  showToast('Checking…');
+  checkDocuSignTab();
+  setTimeout(() => {
+    showToast(state.isOnDocuSign && state.contentScriptReady ? 'Ready' : 'Reload the DocuSign tab', state.isOnDocuSign && state.contentScriptReady ? 'success' : 'error');
+  }, 500);
+}
+
+function copyFillSummaryToClipboard() {
+  if (!state.lastFillSummary) return;
+  const s = state.lastFillSummary;
+  const text = `Filled ${s.count} field(s). Record: ${s.recordLabel}. Template: ${s.templateName}.`;
+  navigator.clipboard.writeText(text).then(() => showToast('Summary copied'), () => showToast('Copy failed', 'error'));
+}
+
+function fillAllBatch() {
+  const indices = state.filteredIndices && state.filteredIndices.length > 0
+    ? state.filteredIndices.slice()
+    : state.csvData ? state.csvData.rows.map((_, i) => i) : [];
+  if (indices.length === 0) {
+    showToast('No records to fill', 'error');
+    return;
+  }
+  let batchIndex = 0;
+  const total = indices.length;
+  const fillBtn = $('fillBtn');
+  const fillAllBatchBtn = $('fillAllBatchBtn');
+
+  function doOne() {
+    if (batchIndex >= indices.length) {
+      fillBtn.textContent = '⚡ Autofill Document';
+      updateFillButton();
+      showToast('Batch complete: ' + total + ' record(s)', 'success');
+      return;
+    }
+    state.selectedRecord = indices[batchIndex];
+    refreshRecords();
+    updateFillButton();
+    fillBtn.innerHTML = '<div class="spinner"></div> Filling ' + (batchIndex + 1) + ' of ' + total + '…';
+    fillBtn.disabled = true;
+    fillAllBatchBtn.disabled = true;
+    triggerFill(false, false, () => {
+      batchIndex++;
+      setTimeout(doOne, 2000);
+    });
+  }
+  doOne();
+}
+
+function duplicateCurrentRecord() {
+  if (state.selectedRecord === null || !state.csvData) {
+    showToast('Select a record first (Fill tab)', 'error');
+    return;
+  }
+  const row = state.csvData.rows[state.selectedRecord];
+  const copy = {};
+  state.csvData.columns.forEach((col) => { copy[col] = row[col]; });
+  state.csvData.rows.push(copy);
+  state.selectedRecord = state.csvData.rows.length - 1;
+  state.recordPage = Math.floor(state.selectedRecord / RECORD_PAGE_SIZE);
+  saveToStorage();
+  refreshRecords();
+  updateFillButton();
+  updatePreviewAndWarnings();
+  showToast('Record duplicated');
+}
+
 function fillNextRecord() {
   if (!state.csvData || state.csvData.rows.length === 0) return;
   const next = state.selectedRecord === null
@@ -1441,6 +1663,207 @@ function refreshAll() {
   updatePreviewAndWarnings();
   updateFillButton();
   refreshFillHistory();
+  refreshHealthCheck();
+}
+
+function refreshHealthCheck() {
+  const docuSignEl = $('healthDocuSignVal');
+  const scriptEl = $('healthScriptVal');
+  const dataEl = $('healthDataVal');
+  const templateEl = $('healthTemplateVal');
+  const mappingsEl = $('healthMappingsVal');
+  const recordEl = $('healthRecordVal');
+  const emptyEl = $('healthEmptyVal');
+  const columnsEl = $('healthColumnsVal');
+  const readyEl = $('healthReadyVal');
+  if (!docuSignEl) return;
+
+  if (state.isOnDocuSign) {
+    docuSignEl.textContent = 'Yes';
+    docuSignEl.className = 'health-ok';
+  } else {
+    docuSignEl.textContent = 'No';
+    docuSignEl.className = 'health-no';
+  }
+
+  if (state.isOnDocuSign && state.contentScriptReady) {
+    scriptEl.textContent = 'Ready';
+    scriptEl.className = 'health-ok';
+  } else if (state.isOnDocuSign) {
+    scriptEl.textContent = 'Not loaded';
+    scriptEl.className = 'health-no';
+  } else {
+    scriptEl.textContent = '—';
+    scriptEl.className = 'health-no';
+  }
+
+  if (state.csvData && state.csvData.rows.length > 0) {
+    dataEl.textContent = 'Loaded (' + state.csvData.rows.length + ' rows)';
+    dataEl.className = 'health-ok';
+  } else if (state.csvData) {
+    dataEl.textContent = 'Loaded (0 rows)';
+    dataEl.className = 'health-no';
+  } else {
+    dataEl.textContent = 'No data';
+    dataEl.className = 'health-no';
+  }
+
+  const templateName = $('templateSelect')?.value || '';
+  let mappingsCount = 0;
+  if (templateName && state.templates[templateName]) {
+    templateEl.textContent = 'Selected';
+    templateEl.className = 'health-ok';
+    mappingsCount = state.templates[templateName].length;
+    if (mappingsEl) {
+      mappingsEl.textContent = mappingsCount + ' (for this template)';
+      mappingsEl.className = mappingsCount > 0 ? 'health-ok' : 'health-no';
+    }
+  } else {
+    templateEl.textContent = 'None';
+    templateEl.className = 'health-no';
+    if (mappingsEl) {
+      mappingsEl.textContent = '—';
+      mappingsEl.className = 'health-no';
+    }
+  }
+
+  if (state.selectedRecord !== null && state.csvData) {
+    recordEl.textContent = 'Selected';
+    recordEl.className = 'health-ok';
+  } else {
+    recordEl.textContent = 'None';
+    recordEl.className = 'health-no';
+  }
+
+  // Empty fields for this record (mapped columns that are empty)
+  let emptyCount = 0;
+  if (emptyEl && templateName && state.templates[templateName] && state.selectedRecord !== null && state.csvData) {
+    const record = state.csvData.rows[state.selectedRecord];
+    const mappings = state.templates[templateName];
+    mappings.forEach((m) => {
+      const val = getRecordValue(record, m.column, m);
+      if (val === undefined || val === null || String(val).trim() === '') emptyCount++;
+    });
+    emptyEl.textContent = emptyCount === 0 ? 'None' : emptyCount + ' empty';
+    emptyEl.className = emptyCount === 0 ? 'health-ok' : 'health-no';
+  } else if (emptyEl) {
+    emptyEl.textContent = '—';
+    emptyEl.className = 'health-no';
+  }
+
+  // Template columns present in CSV
+  if (columnsEl && templateName && state.templates[templateName] && state.csvData) {
+    const cols = state.csvData.columns;
+    const needed = [];
+    state.templates[templateName].forEach((m) => {
+      if (m.column && needed.indexOf(m.column) < 0) needed.push(m.column);
+    });
+    const missing = needed.filter((c) => cols.indexOf(c) < 0);
+    if (missing.length === 0) {
+      columnsEl.textContent = 'All present';
+      columnsEl.className = 'health-ok';
+    } else {
+      columnsEl.textContent = 'Missing: ' + missing.slice(0, 3).join(', ') + (missing.length > 3 ? '…' : '');
+      columnsEl.className = 'health-no';
+    }
+  } else if (columnsEl) {
+    columnsEl.textContent = '—';
+    columnsEl.className = 'health-no';
+  }
+
+  // DocuSign tabs open
+  const tabsEl = $('healthTabsVal');
+  if (tabsEl) {
+    if (state.isOnDocuSign) {
+      tabsEl.textContent = state.docuSignTabCount + ' open (using active)';
+      tabsEl.className = 'health-ok';
+    } else {
+      tabsEl.textContent = state.docuSignTabCount > 0 ? state.docuSignTabCount + ' open' : '—';
+      tabsEl.className = 'health-no';
+    }
+  }
+
+  // Last fill
+  const lastFillEl = $('healthLastFillVal');
+  if (lastFillEl) {
+    if (state.lastFillResult) {
+      if (state.lastFillResult.count != null && state.lastFillResult.count > 0) {
+        lastFillEl.textContent = state.lastFillResult.count + ' field(s)';
+        lastFillEl.className = 'health-ok';
+      } else if (state.lastFillResult.failedKeys && state.lastFillResult.failedKeys.length > 0) {
+        lastFillEl.textContent = 'Failed (' + state.lastFillResult.failedKeys.length + ' missing)';
+        lastFillEl.className = 'health-no';
+      } else {
+        lastFillEl.textContent = 'Failed';
+        lastFillEl.className = 'health-no';
+      }
+    } else {
+      lastFillEl.textContent = '—';
+      lastFillEl.className = 'health-no';
+    }
+  }
+
+  // Last verify (from Mapping tab)
+  const verifyEl = $('healthVerifyVal');
+  if (verifyEl) {
+    if (state.lastVerifyResult) {
+      const missing = state.lastVerifyResult.missing || [];
+      if (missing.length === 0) {
+        verifyEl.textContent = 'All verified';
+        verifyEl.className = 'health-ok';
+      } else {
+        verifyEl.textContent = missing.length + ' missing on page';
+        verifyEl.className = 'health-no';
+      }
+    } else {
+      verifyEl.textContent = '—';
+      verifyEl.className = 'health-no';
+    }
+  }
+
+  // CSV columns not in template (unmapped columns)
+  const unmappedEl = $('healthUnmappedVal');
+  if (unmappedEl && state.csvData && templateName && state.templates[templateName]) {
+    const cols = state.csvData.columns;
+    const mapped = [];
+    state.templates[templateName].forEach((m) => {
+      if (m.column && mapped.indexOf(m.column) < 0) mapped.push(m.column);
+    });
+    const notInTemplate = cols.filter((c) => mapped.indexOf(c) < 0);
+    if (notInTemplate.length === 0) {
+      unmappedEl.textContent = 'All mapped';
+      unmappedEl.className = 'health-ok';
+    } else {
+      unmappedEl.textContent = notInTemplate.length + ' not in template';
+      unmappedEl.className = 'health-no';
+    }
+  } else if (unmappedEl) {
+    unmappedEl.textContent = '—';
+    unmappedEl.className = 'health-no';
+  }
+
+  // Extension version
+  const versionEl = $('healthVersionVal');
+  if (versionEl) {
+    try {
+      const v = chrome.runtime.getManifest().version;
+      versionEl.textContent = 'v' + (v || '—');
+      versionEl.className = 'health-ok';
+    } catch (e) {
+      versionEl.textContent = '—';
+      versionEl.className = 'health-no';
+    }
+  }
+
+  // Ready to fill: all conditions
+  const ready = readyEl && state.isOnDocuSign && state.contentScriptReady &&
+    state.csvData && state.csvData.rows.length > 0 &&
+    templateName && state.templates[templateName] && state.templates[templateName].length > 0 &&
+    state.selectedRecord !== null;
+  if (readyEl) {
+    readyEl.textContent = ready ? 'Yes' : 'No';
+    readyEl.className = ready ? 'health-ok' : 'health-no';
+  }
 }
 
 function refreshCSVStatus() {
@@ -1628,8 +2051,11 @@ function refreshSearchColumnDropdown() {
 // ═════════════════════════════════════════════════════════════════════
 
 function checkDocuSignTab() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const tab = tabs[0];
+  chrome.tabs.query({}, (allTabs) => {
+    state.docuSignTabCount = (allTabs || []).filter((t) => t.url && /docusign\.(com|net)/.test(t.url)).length;
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
 
     if (tab && tab.url && /docusign\.(com|net)/.test(tab.url)) {
       state.isOnDocuSign = true;
@@ -1642,21 +2068,27 @@ function checkDocuSignTab() {
           state.contentScriptReady = !!response && response.ok;
           const staleHint = $('staleTabHint');
           if (staleHint) staleHint.style.display = state.contentScriptReady ? 'none' : 'block';
+          updateFillButton();
+          refreshHealthCheck();
         });
       } catch (e) {
         state.contentScriptReady = false;
         $('staleTabHint').style.display = 'block';
+        updateFillButton();
+        refreshHealthCheck();
       }
     } else {
       state.isOnDocuSign = false;
       state.contentScriptReady = false;
-      $('pageStatus').textContent = 'Not on DocuSign';
+      $('pageStatus').textContent = 'Not on DocuSign — open a DocuSign tab';
       $('pageStatus').style.color = 'var(--text-dim)';
       $('fillTabHint').style.display = 'block';
       $('staleTabHint').style.display = 'none';
     }
 
     updateFillButton();
+    refreshHealthCheck();
+  });
   });
 }
 
@@ -1688,6 +2120,22 @@ function listenForContentMessages() {
       $('capturedFieldName').textContent = message.fieldLabel || message.fieldKey;
       $('pendingCapture').style.display = 'block';
       refreshColumnDropdowns();
+      const label = message.fieldLabel || message.fieldKey || '';
+      const columns = state.csvData ? state.csvData.columns : [];
+      let bestCol = '';
+      let bestScore = 0.25;
+      columns.forEach((col) => {
+        const score = scoreColumnMatch(label, col);
+        if (score > bestScore) { bestScore = score; bestCol = col; }
+      });
+      if (!bestCol && (message.fieldKey || '').toString().length > 2) {
+        columns.forEach((col) => {
+          const score = scoreColumnMatch((message.fieldKey || '').toString(), col);
+          if (score > bestScore) { bestScore = score; bestCol = col; }
+        });
+      }
+      const colSelect = $('columnSelect');
+      if (colSelect && bestCol) colSelect.value = bestCol;
       document.querySelector('.tab[data-tab="mapping"]').click();
     }
   });

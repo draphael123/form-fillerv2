@@ -110,6 +110,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     deactivateCaptureMode();
     if (isTopFrame()) broadcastToFrames(DOCUFILL_PREFIX + 'CAPTURE_MODE_OFF');
   }
+  if (message.type === 'VERIFY_MAPPINGS') {
+    const fieldKeys = message.fieldKeys || [];
+    function runVerify() {
+      const found = [];
+      const missing = [];
+      fieldKeys.forEach(function (key) {
+        const el = findFieldByKey(key);
+        if (el) found.push(key); else missing.push(key);
+      });
+      return { found, missing };
+    }
+    if (!isTopFrame()) {
+      sendResponse({ success: true, found: runVerify().found, missing: runVerify().missing });
+      return true;
+    }
+    const main = runVerify();
+    const iframes = document.querySelectorAll('iframe');
+    if (iframes.length === 0) {
+      sendResponse({ success: true, found: main.found, missing: main.missing });
+      return true;
+    }
+    const allFound = {};
+    main.found.forEach(function (k) { allFound[k] = true; });
+    let pending = iframes.length;
+    function onResult(ev) {
+      if (ev.data && ev.data.type === DOCUFILL_PREFIX + 'VERIFY_RESULT') {
+        (ev.data.found || []).forEach(function (k) { allFound[k] = true; });
+        pending--;
+        if (pending <= 0) finish();
+      }
+    }
+    function finish() {
+      window.removeEventListener('message', onResult);
+      const found = Object.keys(allFound);
+      const missing = fieldKeys.filter(function (k) { return !allFound[k]; });
+      sendResponse({ success: true, found, missing });
+    }
+    window.addEventListener('message', onResult);
+    iframes.forEach(function (frame) {
+      try { frame.contentWindow.postMessage({ type: DOCUFILL_PREFIX + 'VERIFY_MAPPINGS', fieldKeys: fieldKeys }, '*'); } catch (e) { pending--; }
+    });
+    setTimeout(function () { if (pending > 0) { pending = 0; finish(); } }, 2000);
+    return true;
+  }
   if (message.type === 'FILL_FIELDS') {
     const mappings = message.mappings;
     const record = message.record;
@@ -186,6 +230,16 @@ window.addEventListener('message', function (ev) {
   if (ev.data.type === DOCUFILL_PREFIX + 'SCAN_FIELDS') {
     const fields = getFieldsInDocument(document);
     try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'SCAN_RESULT', fields: fields }, '*'); } catch (e) {}
+  }
+  if (ev.data.type === DOCUFILL_PREFIX + 'VERIFY_MAPPINGS') {
+    const fieldKeys = ev.data.fieldKeys || [];
+    const found = [];
+    const missing = [];
+    fieldKeys.forEach(function (key) {
+      const el = findFieldByKey(key);
+      if (el) found.push(key); else missing.push(key);
+    });
+    try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'VERIFY_RESULT', found: found, missing: missing }, '*'); } catch (e) {}
   }
 });
 
@@ -281,7 +335,10 @@ function fillFields(mappings, record, failedKeysOnly) {
   toProcess.forEach((mapping) => {
     let value = record[mapping.column];
     if (value === undefined || value === null) return;
-    const el = findFieldByKey(mapping.fieldKey);
+    let el = findFieldByKey(mapping.fieldKey);
+    if (!el && mapping.fieldLabel && String(mapping.fieldLabel).trim() && String(mapping.fieldLabel) !== String(mapping.fieldKey)) {
+      el = findFieldByKey(mapping.fieldLabel);
+    }
     if (!el) { errors.push('Field not found: ' + (mapping.fieldLabel || mapping.fieldKey)); failedKeys.push(mapping.fieldKey); return; }
     try {
       previousValues.push({ fieldKey: mapping.fieldKey, value: getFieldValue(el) });
