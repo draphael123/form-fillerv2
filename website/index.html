@@ -441,9 +441,9 @@
   <div id="demo-container" style="display:flex; gap:24px; margin-top:32px; flex-wrap:wrap; max-width:900px; margin-left:auto; margin-right:auto;">
     <div id="demo-form" style="flex:1; min-width:280px; background:var(--blue-pale); border:2px solid var(--border); border-radius:16px; padding:24px;">
       <div style="font-size:12px; font-weight:600; color:var(--blue); margin-bottom:16px;">Mock DocuSign form</div>
-      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Name</label><input type="text" id="demo-field-name" data-field="name" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
-      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Email</label><input type="text" id="demo-field-email" data-field="email" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
-      <div><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Company</label><input type="text" id="demo-field-company" data-field="company" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Provider Name</label><input type="text" id="demo-field-name" data-field="providerName" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+      <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">NPI</label><input type="text" id="demo-field-npi" data-field="npi" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
+      <div><label style="display:block; font-size:12px; color:var(--navy-muted); margin-bottom:4px;">Email</label><input type="text" id="demo-field-email" data-field="email" placeholder="Click mapping to link" style="width:100%; padding:10px; border:2px solid var(--border); border-radius:8px; font-size:14px;" /></div>
     </div>
     <div id="demo-panel" style="flex:1; min-width:260px; background:var(--white); border:2px solid var(--border); border-radius:16px; padding:20px; box-shadow:var(--shadow);">
       <div style="font-size:12px; font-weight:600; color:var(--blue); margin-bottom:12px;">DocuFill panel</div>
@@ -452,15 +452,18 @@
       <button id="demo-fill-btn" style="width:100%; padding:12px; background:var(--blue); color:#fff; border:none; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer;">⚡ Fill</button>
     </div>
   </div>
-  <p style="margin-top:16px; font-size:13px; color:var(--navy-soft);">Fields are pre-mapped: Name→Name, Email→Email, Company→Company. Select a record and click Fill to see the mock form populate.</p>
+  <p style="margin-top:16px; font-size:13px; color:var(--navy-soft);">Fields are pre-mapped: Provider Name, NPI, Email. Select a record and click Fill to see the mock form populate.</p>
 </div>
 
 <div class="section reveal" id="try-it" style="background:var(--blue-pale); border-top:2px solid var(--border);">
   <div class="section-eyebrow">Try it</div>
   <h2 class="section-title">Try DocuFill with sample data</h2>
-  <p class="section-sub">Download a sample CSV, install the extension, then open a DocuSign document and map fields. No account signup required.</p>
-  <a href="public/sample.csv" download="sample.csv" class="btn-download" style="display:inline-flex; margin-top:16px;">↓ Download sample.csv</a>
-  <p style="margin-top:16px; font-size:14px; color:var(--navy-muted);">The sample has columns: Name, Email, Company, Title. Install the extension, upload this file in the Data tab, then map and fill.</p>
+  <p class="section-sub">Download a provider-compliance sample CSV, install the extension, then open a DocuSign provider agreement and map fields. No account signup required.</p>
+  <p style="margin-top:16px;">
+    <a href="public/docufill_providers.csv" download="docufill_providers.csv" class="btn-download" style="display:inline-flex; margin-right:12px;">↓ docufill_providers.csv</a>
+    <a href="public/sample.csv" download="sample.csv" class="btn-secondary-link" style="display:inline-flex;">sample.csv</a>
+  </p>
+  <p style="margin-top:16px; font-size:14px; color:var(--navy-muted);">Columns: Provider Name, NPI, License Number, Email, Agreement Status. Install the extension, upload in the Data tab (or use the built-in sample), then map and fill.</p>
 </div>
 
 <div class="section reveal" id="comparison" style="background:var(--blue-pale); border-top:2px solid var(--border);">
@@ -767,8 +770,8 @@ document.getElementById('contact-form').addEventListener('submit', function(e) {
 })();
 
 (function() {
-  var demoData = [{ Name: 'Jane Doe', Email: 'jane@example.com', Company: 'Acme Inc' }, { Name: 'John Smith', Email: 'john@example.com', Company: 'Widget Co' }, { Name: 'Maria Garcia', Email: 'maria@example.com', Company: 'Tech Solutions' }];
-  var demoMapping = { name: 'Name', email: 'Email', company: 'Company' };
+  var demoData = [{ 'Provider Name': 'Jane Doe', NPI: '1234567890', Email: 'jane@example.com' }, { 'Provider Name': 'John Smith', NPI: '0987654321', Email: 'john@example.com' }, { 'Provider Name': 'Maria Garcia', NPI: '1122334455', Email: 'maria@example.com' }];
+  var demoMapping = { providerName: 'Provider Name', npi: 'NPI', email: 'Email' };
   var recSelect = document.getElementById('demo-record');
   var fillBtn = document.getElementById('demo-fill-btn');
   if (fillBtn && recSelect) {
@@ -776,11 +779,11 @@ document.getElementById('contact-form').addEventListener('submit', function(e) {
       var idx = parseInt(recSelect.value, 10);
       var r = demoData[idx] || {};
       var nameEl = document.getElementById('demo-field-name');
+      var npiEl = document.getElementById('demo-field-npi');
       var emailEl = document.getElementById('demo-field-email');
-      var companyEl = document.getElementById('demo-field-company');
-      if (nameEl) nameEl.value = r[demoMapping.name] || '';
+      if (nameEl) nameEl.value = r[demoMapping.providerName] || '';
+      if (npiEl) npiEl.value = r[demoMapping.npi] || '';
       if (emailEl) emailEl.value = r[demoMapping.email] || '';
-      if (companyEl) companyEl.value = r[demoMapping.company] || '';
     });
   }
 })();

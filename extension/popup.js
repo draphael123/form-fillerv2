@@ -41,8 +41,9 @@ const DEFAULT_SETTINGS = {
 const RECORD_PAGE_SIZE = 50;
 const FILL_HISTORY_MAX = 10;
 
+// Default source: provider compliance dashboard workflow (see CURSOR_PROMPT / first-use workflow)
 const SAMPLE_CSV =
-  'Name,Email,Company\nJane Doe,jane@example.com,Acme Inc\nJohn Smith,john@example.com,Widget Co';
+  'Provider Name,NPI,License Number,Email,Agreement Status\nJane Doe,1234567890,UT-12345,jane@example.com,Signed\nJohn Smith,0987654321,UT-67890,john@example.com,Pending';
 
 
 // ═════════════════════════════════════════════════════════════════════
@@ -129,6 +130,16 @@ function scoreColumnMatch(fieldLabel, column) {
     (w) => bWords.some((bw) => bw.includes(w) || w.includes(bw))
   ).length;
   if (overlap > 0) return 0.4 + (overlap / Math.max(aWords.length, bWords.length)) * 0.4;
+
+  const synonymPairs = [
+    ['name', 'provider name'], ['name', 'applicant name'], ['name', 'first name'], ['name', 'full name'],
+    ['license', 'license number'], ['license', 'dopl license'], ['number', 'license number'], ['number', 'npi'],
+    ['email', 'email address'], ['phone', 'phone number'], ['address', 'practice establishment'], ['status', 'agreement status']
+  ];
+  for (let i = 0; i < synonymPairs.length; i++) {
+    const [x, y] = synonymPairs[i];
+    if ((a.includes(x) && b.includes(y)) || (a.includes(y) && b.includes(x))) return 0.65;
+  }
   return 0;
 }
 
@@ -566,7 +577,7 @@ async function loadSelectedSheet() {
 function loadSampleCsv(silent) {
   try {
     const parsed = parseCSV(SAMPLE_CSV);
-    state.csvData = { name: 'sample.csv', columns: parsed.columns, rows: parsed.rows };
+    state.csvData = { name: 'docufill_providers.csv', columns: parsed.columns, rows: parsed.rows };
     state.filledRecordIndices = [];
     saveToStorage();
     refreshAll();
@@ -899,11 +910,17 @@ function scanPageForFields() {
     response.fields.forEach((f) => {
       const label = f.fieldLabel || f.fieldKey || '';
       let bestCol = '';
-      let bestScore = 0.3;
+      let bestScore = 0.25;
       columns.forEach((col) => {
         const score = scoreColumnMatch(label, col);
         if (score > bestScore) { bestScore = score; bestCol = col; }
       });
+      if (!bestCol && (f.fieldKey || '').toString().length > 2) {
+        columns.forEach((col) => {
+          const score = scoreColumnMatch((f.fieldKey || '').toString(), col);
+          if (score > bestScore) { bestScore = score; bestCol = col; }
+        });
+      }
       if (bestCol) {
         mappings.push({
           fieldKey: f.fieldKey,

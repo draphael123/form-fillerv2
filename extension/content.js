@@ -41,6 +41,7 @@ function getFieldValue(el) {
   const type = (el.type || '').toLowerCase();
   if (tag === 'select') return el.options[el.selectedIndex]?.value ?? '';
   if (type === 'checkbox' || type === 'radio') return el.checked ? 'true' : 'false';
+  if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return (el.textContent || '').trim();
   return el.value ?? '';
 }
 
@@ -223,9 +224,18 @@ function deactivateCaptureMode() {
   document.removeEventListener('click', onClick, true);
 }
 
+function resolveClickTarget(target) {
+  if (!target || !target.getBoundingClientRect) return null;
+  if (target.tagName === 'LABEL' && target.htmlFor) {
+    const forEl = document.getElementById(target.htmlFor);
+    if (forEl) return findInputElement(forEl) || forEl;
+  }
+  return findInputElement(target);
+}
+
 function onMouseOver(e) {
   if (!captureMode) return;
-  const el = findInputElement(e.target);
+  const el = resolveClickTarget(e.target);
   if (!el) return;
   clearHighlight();
   highlightedEl = el;
@@ -249,7 +259,7 @@ function clearHighlight() {
 
 function onClick(e) {
   if (!captureMode) return;
-  const el = findInputElement(e.target);
+  const el = resolveClickTarget(e.target);
   if (!el) return;
   e.preventDefault();
   e.stopPropagation();
@@ -300,6 +310,10 @@ function setFieldValue(el, value) {
       el.checked = true;
       triggerEvents(el, ['change', 'click']);
     }
+  } else if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') {
+    el.focus();
+    el.textContent = value;
+    triggerEvents(el, ['input', 'change', 'blur', 'keyup']);
   } else {
     const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
     const nativeTextareaSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
@@ -314,24 +328,47 @@ function triggerEvents(el, events) {
   events.forEach(eventName => el.dispatchEvent(new Event(eventName, { bubbles: true, cancelable: true })));
 }
 
+function findInputInTree(root) {
+  if (!root) return null;
+  const tag = root.tagName?.toLowerCase();
+  if (['input', 'select', 'textarea'].includes(tag)) {
+    if (tag === 'input' && ['hidden', 'submit', 'button', 'image'].includes((root.type || '').toLowerCase())) return null;
+    return root;
+  }
+  if (root.contentEditable === 'true' || root.getAttribute('contenteditable') === 'true') return root;
+  if (root.classList && (root.classList.contains('ds-field') || root.getAttribute('data-testid')?.includes('field') || root.getAttribute('role') === 'textbox' || root.getAttribute('role') === 'combobox')) return root;
+  const sel = 'input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea, [contenteditable="true"], [role="textbox"]';
+  const direct = root.querySelector && root.querySelector(sel);
+  if (direct) return direct;
+  if (root.shadowRoot) {
+    const inShadow = findInputInTree(root.shadowRoot) || root.shadowRoot.querySelector(sel);
+    if (inShadow) return inShadow;
+  }
+  const children = root.querySelectorAll && root.querySelectorAll('*');
+  if (children) for (let i = 0; i < Math.min(children.length, 20); i++) {
+    if (children[i].shadowRoot) {
+      const inShadow = findInputInTree(children[i].shadowRoot) || children[i].shadowRoot.querySelector(sel);
+      if (inShadow) return inShadow;
+    }
+  }
+  return null;
+}
+
 function findInputElement(el) {
   if (!el || !el.getBoundingClientRect) return null;
   let target = el;
   let depth = 0;
-  while (target && depth < 8) {
+  while (target && depth < 10) {
+    const found = findInputInTree(target);
+    if (found && found !== target) return found;
     const tag = target.tagName?.toLowerCase();
     if (['input', 'select', 'textarea'].includes(tag)) {
       if (tag === 'input' && ['hidden', 'submit', 'button', 'image'].includes((target.type || '').toLowerCase())) { target = target.parentElement; depth++; continue; }
       return target;
     }
     if (target.contentEditable === 'true' || target.getAttribute('contenteditable') === 'true') return target;
-    if (target.classList && (
-      target.classList.contains('ds-field') ||
-      target.getAttribute('data-testid')?.includes('field') ||
-      target.getAttribute('role') === 'textbox' ||
-      target.getAttribute('role') === 'combobox'
-    )) return target;
-    var inner = target.querySelector && target.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea, [contenteditable="true"], [role="textbox"]');
+    if (target.classList && (target.classList.contains('ds-field') || target.getAttribute('data-testid')?.includes('field') || target.getAttribute('role') === 'textbox' || target.getAttribute('role') === 'combobox')) return target;
+    var inner = findInputInTree(target);
     if (inner) return inner;
     target = target.parentElement;
     depth++;
@@ -345,31 +382,99 @@ function extractFieldInfo(el) {
   const dataId = el.getAttribute('data-id') || el.getAttribute('data-field-id') ||
                  el.getAttribute('data-tab-id') || el.getAttribute('data-testid');
   const ariaLabel = el.getAttribute('aria-label');
+  const dataTabLabel = el.getAttribute('data-tab-label') || el.getAttribute('data-label');
+  const title = el.getAttribute('title');
   let label = '';
   if (id) { const labelEl = document.querySelector(`label[for="${id}"]`); if (labelEl) label = labelEl.textContent.trim(); }
+  if (!label && dataTabLabel) label = dataTabLabel;
   if (!label && ariaLabel) label = ariaLabel;
+  if (!label && title) label = title;
   if (!label && el.placeholder) label = el.placeholder;
   if (!label && name) label = name;
+  if (!label && dataId && /[a-zA-Z]/.test(dataId)) label = dataId.replace(/[-_]([a-z])/gi, ' $1').replace(/^./, function (c) { return c.toUpperCase(); });
+  if (!label) label = getLabelFromNearbyElement(el);
   if (!label) label = el.className.split(' ')[0] || 'Unknown Field';
+  if (label === 'Text' || label === 'Unknown Field') {
+    const hint = (name || dataId || id || '').toString();
+    if (hint && /name|email|phone|address|license|npi|number|date|sign/i.test(hint)) label = hint.replace(/[-_]([a-z])/gi, ' $1').replace(/^./, function (c) { return c.toUpperCase(); });
+  }
   const key = id || name || dataId || buildXPath(el);
   return { key, label };
 }
 
-function findFieldByKey(key) {
-  let el = document.getElementById(key);
+function getLabelFromNearbyElement(el) {
+  const trimLabel = (t) => (t && t.length < 80 && !/^[\d\s]+$/.test(t) ? t.replace(/\s+/g, ' ').slice(0, 60) : '');
+  let prev = el.previousElementSibling;
+  if (prev) {
+    const t = (prev.textContent || '').trim();
+    const out = trimLabel(t);
+    if (out) return out;
+  }
+  let parent = el.parentElement;
+  for (let i = 0; i < 4 && parent; i++) {
+    const prevSib = parent.previousElementSibling;
+    if (prevSib) {
+      const t = (prevSib.textContent || '').trim();
+      const out = trimLabel(t);
+      if (out) return out;
+    }
+    const firstChild = parent.firstElementChild;
+    if (firstChild && firstChild !== el) {
+      const t = (firstChild.textContent || '').trim();
+      const out = trimLabel(t);
+      if (out) return out;
+    }
+    parent = parent.parentElement;
+  }
+  return '';
+}
+
+function escapeSelectorAttr(val) {
+  return String(val).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function findInRootByKey(root, key) {
+  if (!root) return null;
+  let el = null;
+  try { if (root.getElementById) el = root.getElementById(key); } catch (e) {}
   if (el) return el;
-  el = document.querySelector(`[name="${key}"]`);
+  const esc = escapeSelectorAttr(key);
+  el = root.querySelector && root.querySelector('[name="' + esc + '"]');
   if (el) return el;
-  el = document.querySelector(`[data-id="${key}"]`) ||
-       document.querySelector(`[data-field-id="${key}"]`) ||
-       document.querySelector(`[data-tab-id="${key}"]`) ||
-       document.querySelector(`[data-testid="${key}"]`);
+  el = root.querySelector && (root.querySelector('[data-id="' + esc + '"]') || root.querySelector('[data-field-id="' + esc + '"]') || root.querySelector('[data-tab-id="' + esc + '"]') || root.querySelector('[data-testid="' + esc + '"]'));
   if (el) return el;
-  try {
-    const result = document.evaluate(key, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-    if (result.singleNodeValue) return result.singleNodeValue;
-  } catch (e) {}
+  if (root.evaluate) {
+    try {
+      const result = root.evaluate(key, root, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      if (result.singleNodeValue) return result.singleNodeValue;
+    } catch (e) {}
+  }
+  const all = root.querySelectorAll && root.querySelectorAll('*');
+  if (all) for (let i = 0; i < all.length; i++) {
+    if (all[i].shadowRoot) {
+      const inShadow = findInRootByKey(all[i].shadowRoot, key);
+      if (inShadow) return inShadow;
+    }
+  }
   return null;
+}
+
+function findFieldByKey(key) {
+  let el = findInRootByKey(document, key);
+  if (el) return el;
+  const walkShadow = (root) => {
+    const all = root.querySelectorAll && root.querySelectorAll('*');
+    if (all) for (let i = 0; i < all.length; i++) {
+      if (all[i].shadowRoot) {
+        const found = findInRootByKey(all[i].shadowRoot, key);
+        if (found) return found;
+        const deep = walkShadow(all[i].shadowRoot);
+        if (deep) return deep;
+      }
+    }
+    return null;
+  };
+  return walkShadow(document);
 }
 
 function buildXPath(el) {
