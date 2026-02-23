@@ -95,6 +95,25 @@
     }
     .btn-primary { background: var(--accent); color: #fff; width: 100%; }
     .btn-primary:hover { filter: brightness(1.15); box-shadow: 0 0 14px var(--accent-glow); }
+    #captureModeBtn { 
+      background: var(--accent); 
+      color: #fff; 
+      font-weight: 600;
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    #captureModeBtn:hover { 
+      filter: brightness(1.2); 
+      box-shadow: 0 0 24px rgba(79,124,255,0.6);
+      transform: translateY(-1px);
+    }
+    #captureModeBtn.capturing {
+      background: var(--success);
+      animation: none;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(79,124,255,0.4); }
+      50% { box-shadow: 0 0 30px rgba(79,124,255,0.6); }
+    }
     .btn-secondary {
       background: var(--surface2); color: var(--text);
       border: 1px solid var(--border); width: 100%;
@@ -272,15 +291,15 @@
   </div>
 
   <div class="tabs" role="tablist">
-    <div class="tab active" data-tab="fill" role="tab" aria-selected="true" id="tab-fill-btn">Fill</div>
-    <div class="tab" data-tab="mapping" role="tab" aria-selected="false">Mapping</div>
+    <div class="tab active" data-tab="mapping" role="tab" aria-selected="true">Mapping</div>
+    <div class="tab" data-tab="fill" role="tab" aria-selected="false" id="tab-fill-btn">Fill</div>
     <div class="tab" data-tab="data" role="tab" aria-selected="false">Data</div>
     <div class="tab" data-tab="settings" role="tab" aria-selected="false" id="tab-settings-btn">Settings</div>
     <div class="tab" data-tab="help" role="tab" aria-selected="false" id="tab-help-btn">Help</div>
   </div>
 
   <!-- FILL TAB -->
-  <div class="panel active" id="tab-fill">
+  <div class="panel" id="tab-fill">
     <div class="csv-status">
       <div class="csv-dot" id="csvDot"></div>
       <span class="csv-name" id="csvName">No file loaded</span>
@@ -356,7 +375,7 @@
   </div>
 
   <!-- MAPPING TAB -->
-  <div class="panel" id="tab-mapping">
+  <div class="panel active" id="tab-mapping">
     <div class="mapping-banner" id="mappingBanner">
       <div class="mapping-banner-text">🎯 Mapping Mode Active</div>
       <div class="mapping-banner-sub">Click any field in DocuSign to capture it</div>
@@ -369,12 +388,23 @@
       <button class="btn btn-secondary btn-sm" id="loadTemplateBtn">Load</button>
     </div>
 
+    <button class="btn btn-secondary btn-sm" id="loadDefaultFieldsBtn" style="margin-bottom:8px; width:100%;">📋 Load Common Fields (Name, Email, Phone, etc.)</button>
     <button class="btn btn-secondary btn-sm" id="loadPresetProviderBtn" style="margin-bottom:8px; width:100%;">Load preset: Provider compliance</button>
-    <button class="btn btn-primary" id="scanFieldsBtn" style="margin-bottom:8px;">🔍 Scan page for fields</button>
-    <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Finds all form fields and matches them to your CSV columns by name.</p>
-    <button class="btn btn-secondary" id="captureModeBtn" style="margin-bottom:12px;">
-      🎯 Start Capturing Fields
+    
+    <!-- Prominent Capture Mode Button -->
+    <div style="background: linear-gradient(135deg, rgba(79,124,255,0.15) 0%, rgba(79,124,255,0.05) 100%); border: 2px solid var(--accent); border-radius: var(--radius); padding: 12px; margin-bottom: 12px;">
+      <button class="btn btn-primary" id="captureModeBtn" style="width:100%; font-size:13px; font-weight:600; padding:12px; margin-bottom:8px; box-shadow: 0 0 20px rgba(79,124,255,0.4);">
+        🎯 Start Capturing Fields
+      </button>
+      <p style="font-size:11px; color:var(--text-muted); text-align:center; margin:0; line-height:1.4;">
+        <strong style="color:var(--accent);">Recommended for prepare mode:</strong> Click this button, then click each field on the document to map it to your CSV columns.
+      </p>
+    </div>
+    
+    <button class="btn btn-secondary" id="scanFieldsBtn" style="margin-bottom:8px;">
+      🔍 Scan page for fields
     </button>
+    <p style="font-size:11px; color:var(--text-muted); margin-bottom:12px;">Finds all form fields and matches them to your CSV columns by name. (Works best in signing mode)</p>
 
     <div id="pendingCapture" style="display:none; margin-bottom:12px;">
       <div class="section-label">Captured Field</div>
@@ -412,6 +442,15 @@
     </div>
 
     <button class="btn btn-secondary btn-sm" id="verifyMappingsBtn" style="margin-top:8px; width:100%;">✓ Verify mappings on page</button>
+    <button class="btn btn-secondary btn-sm" id="readPropertyPanelBtn" style="margin-top:8px; width:100%;">
+      📋 Read from Property Panel
+    </button>
+    <button class="btn btn-secondary btn-sm" id="addFieldManuallyBtn" style="margin-top:8px; width:100%;">
+      ✏️ Add Field Manually
+    </button>
+    <p style="font-size:11px; color:var(--text-muted); margin-top:4px; margin-bottom:12px;">
+      <strong>For prepare mode:</strong> If auto-detection doesn't work, click "Add Field Manually" and type the field name/ID from DocuSign's property panel.
+    </p>
     <div class="divider"></div>
     <button class="btn btn-primary" id="saveTemplateBtn">💾 Save Template</button>
   </div>

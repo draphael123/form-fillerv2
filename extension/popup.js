@@ -216,6 +216,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function setupTabs() {
+  // Ensure Mapping tab is active by default (first tab)
+  const mappingTab = document.querySelector('.tab[data-tab="mapping"]');
+  const fillTab = document.querySelector('.tab[data-tab="fill"]');
+  if (mappingTab && fillTab) {
+    // Remove active from Fill tab if it's set
+    fillTab.classList.remove('active');
+    fillTab.setAttribute('aria-selected', 'false');
+    // Ensure Mapping tab is active
+    mappingTab.classList.add('active');
+    mappingTab.setAttribute('aria-selected', 'true');
+    // Update panels
+    document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+    const mappingPanel = $('tab-mapping');
+    const fillPanel = $('tab-fill');
+    if (mappingPanel) mappingPanel.classList.add('active');
+    if (fillPanel) fillPanel.classList.remove('active');
+  }
+  
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach((t) => {
@@ -282,6 +300,12 @@ async function loadFromStorage() {
         state.settings = { ...DEFAULT_SETTINGS, ...result.settings };
       }
       if (result.onboardingDismissed) state.onboardingDismissed = true;
+      
+      // Auto-load default common fields on first use (if no mappings exist)
+      if (result.defaultFieldsLoaded !== true && state.pendingMappings.length === 0) {
+        loadDefaultCommonFields(true); // silent = true for first load
+        chrome.storage.local.set({ defaultFieldsLoaded: true });
+      }
       if (Array.isArray(result.fillHistory)) {
         state.fillHistory = result.fillHistory.slice(0, FILL_HISTORY_MAX);
       }
@@ -927,9 +951,74 @@ function setupMappingTab() {
   $('cancelCaptureBtn').addEventListener('click', cancelCapture);
   $('saveTemplateBtn').addEventListener('click', saveTemplate);
   $('verifyMappingsBtn').addEventListener('click', verifyMappingsOnPage);
+  $('readPropertyPanelBtn').addEventListener('click', readFromPropertyPanel);
+  $('addFieldManuallyBtn').addEventListener('click', addFieldManually);
+  $('loadDefaultFieldsBtn').addEventListener('click', () => loadDefaultCommonFields(false));
   $('loadPresetProviderBtn').addEventListener('click', loadPresetProviderCompliance);
   $('newTemplateBtn').addEventListener('click', newTemplate);
   $('loadTemplateBtn').addEventListener('click', loadTemplateIntoEditor);
+}
+
+function loadDefaultCommonFields(silent) {
+  // Common fields that appear in most forms
+  const commonFields = [
+    { fieldKey: 'name', fieldLabel: 'Name', commonVariants: ['name', 'full name', 'fullname', 'applicant name', 'provider name', 'person name'] },
+    { fieldKey: 'email', fieldLabel: 'Email', commonVariants: ['email', 'e-mail', 'email address'] },
+    { fieldKey: 'phone', fieldLabel: 'Phone', commonVariants: ['phone', 'phone number', 'telephone', 'mobile', 'cell'] },
+    { fieldKey: 'address', fieldLabel: 'Address', commonVariants: ['address', 'street address', 'street'] },
+    { fieldKey: 'city', fieldLabel: 'City', commonVariants: ['city'] },
+    { fieldKey: 'state', fieldLabel: 'State', commonVariants: ['state', 'province'] },
+    { fieldKey: 'zip', fieldLabel: 'Zip Code', commonVariants: ['zip', 'zip code', 'postal code', 'postcode'] },
+    { fieldKey: 'date', fieldLabel: 'Date', commonVariants: ['date', 'date signed', 'signature date'] }
+  ];
+  
+  let added = 0;
+  commonFields.forEach((field) => {
+    // Skip if field already exists
+    if (state.pendingMappings.some((m) => {
+      const mKey = (m.fieldKey || '').toLowerCase();
+      const mLabel = (m.fieldLabel || '').toLowerCase();
+      return mKey === field.fieldKey.toLowerCase() || 
+             mLabel === field.fieldLabel.toLowerCase() ||
+             field.commonVariants.some(v => mKey.includes(v) || mLabel.includes(v));
+    })) return;
+    
+    // Try to auto-match to CSV column
+    let matchedColumn = '';
+    if (state.csvData && state.csvData.columns.length > 0) {
+      // Look for exact match first
+      const exactMatch = state.csvData.columns.find(col => {
+        const colLower = col.toLowerCase();
+        return colLower === field.fieldKey || 
+               colLower === field.fieldLabel.toLowerCase() ||
+               field.commonVariants.some(v => colLower.includes(v));
+      });
+      
+      if (exactMatch) {
+        matchedColumn = exactMatch;
+      } else {
+        // Fallback to first column
+        matchedColumn = state.csvData.columns[0];
+      }
+    }
+    
+    state.pendingMappings.push({ 
+      fieldKey: field.fieldKey, 
+      fieldLabel: field.fieldLabel, 
+      column: matchedColumn 
+    });
+    added++;
+  });
+  
+  if (added > 0) {
+    refreshColumnDropdowns();
+    renderMappingsList();
+    if (!silent) {
+      showToast(`✅ Loaded ${added} common field(s). Map them to your CSV columns.`, 'success');
+    }
+  } else if (!silent) {
+    showToast('Common fields already loaded', '');
+  }
 }
 
 function loadPresetProviderCompliance() {
@@ -947,6 +1036,97 @@ function loadPresetProviderCompliance() {
   refreshColumnDropdowns();
   renderMappingsList();
   showToast('Preset loaded — assign columns if needed');
+}
+
+function readFromPropertyPanel() {
+  showToast('Reading from property panel...', '');
+  
+  // First, verify content script is loaded
+  sendToActiveTab({ type: 'PING' }, (pingResponse) => {
+    if (chrome.runtime.lastError || !pingResponse || !pingResponse.ok) {
+      showToast('Error: Content script not loaded. Refresh the DocuSign page (F5) and try again.', 'error');
+      console.error('DocuFill: Content script not responding');
+      return;
+    }
+    
+    // Now read property panel
+    sendToActiveTab({ type: 'READ_PROPERTY_PANEL' }, (response) => {
+      if (chrome.runtime.lastError) {
+        showToast('Error: Reload the DocuSign tab and try again', 'error');
+        console.error('DocuFill: Error reading property panel', chrome.runtime.lastError);
+        return;
+      }
+      
+      console.log('DocuFill Popup: Property panel response:', response);
+      
+      if (response && response.fields && response.fields.length > 0) {
+        let added = 0;
+        response.fields.forEach(field => {
+          if (!state.pendingMappings.find(m => m.fieldKey === field.fieldKey)) {
+            state.pendingMappings.push({
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel || field.fieldKey,
+              column: ''
+            });
+            added++;
+          }
+        });
+        if (added > 0) {
+          renderMappingsList();
+          showToast(`✅ Found ${added} field(s) in property panel!`, 'success');
+        } else {
+          showToast('No new fields found. Make sure a field is selected in DocuSign.', '');
+        }
+      } else {
+        showToast('No fields found. Click a field in DocuSign first, then try again.', '');
+        console.log('DocuFill Popup: No fields returned from property panel read');
+      }
+    });
+  });
+}
+
+function addFieldManually() {
+  const instructions = `Enter the field identifier from DocuSign:
+
+HOW TO FIND IT:
+1. Click a field in DocuSign
+2. Open DevTools (F12) → Elements tab
+3. Right-click the field → "Inspect Element"
+4. Look for one of these attributes:
+   - id="..."
+   - name="..."
+   - data-tab-id="..."
+   - data-field-id="..."
+   - data-testid="..."
+5. Copy the VALUE of that attribute
+
+Enter the field identifier:`;
+  
+  const fieldName = prompt(instructions);
+  if (!fieldName || !fieldName.trim()) {
+    return;
+  }
+  
+  const fieldKey = fieldName.trim();
+  const fieldLabel = fieldName.trim();
+  
+  // Check if field already exists
+  const existing = state.pendingMappings.find(m => m.fieldKey === fieldKey);
+  if (existing) {
+    showToast('Field already exists in mappings', '');
+    return;
+  }
+  
+  // Add the field
+  state.pendingMappings.push({
+    fieldKey: fieldKey,
+    fieldLabel: fieldLabel,
+    column: ''
+  });
+  
+  renderMappingsList();
+  saveToStorage();
+  showToast(`✅ Added field: ${fieldLabel}\n\nNote: This will autofill if the field identifier matches DocuSign's field attributes.`, 'success');
 }
 
 function verifyMappingsOnPage() {
@@ -995,7 +1175,17 @@ function scanPageForFields() {
       return;
     }
     if (!response || !response.success || !response.fields || !response.fields.length) {
-      showToast('No fields found on this page', 'error');
+      // Provide more helpful guidance
+      const message = 'No fields found. In DocuSign prepare mode, fields may not be scannable. Use "Start Capturing Fields" and click each field to map it.';
+      showToast(message, 'error');
+      // Auto-suggest capture mode
+      setTimeout(() => {
+        const captureBtn = $('captureModeBtn');
+        if (captureBtn && !state.captureMode) {
+          captureBtn.style.border = '2px solid var(--accent)';
+          captureBtn.style.boxShadow = '0 0 10px rgba(79, 124, 255, 0.5)';
+        }
+      }, 500);
       return;
     }
 
@@ -1043,15 +1233,55 @@ function toggleCaptureMode() {
 
   if (state.captureMode) {
     btn.textContent = '⏹ Stop Capturing';
-    btn.style.borderColor = 'var(--accent)';
-    btn.style.color = 'var(--accent)';
+    btn.classList.add('capturing');
     $('mappingBanner').classList.add('active');
-    sendToActiveTab({ type: 'CAPTURE_MODE_ON' });
-    showToast('Click any field in DocuSign');
+    
+    // First verify content script is loaded
+    sendToActiveTab({ type: 'PING' }, (pingResponse) => {
+      if (chrome.runtime.lastError || !pingResponse || !pingResponse.ok) {
+        showToast('Error: Content script not loaded. Refresh the DocuSign page (F5) and try again.', 'error');
+        console.error('❌ DocuFill: Content script not responding!', chrome.runtime.lastError);
+        console.log('DocuFill: Please refresh the DocuSign page (F5) and try again.');
+        return;
+      }
+      
+      console.log('✅ DocuFill: Content script is loaded and responding');
+      
+      // Now activate capture mode
+      sendToActiveTab({ type: 'CAPTURE_MODE_ON' }, (response) => {
+        if (chrome.runtime.lastError) {
+          showToast('Error activating capture mode. Refresh the page.', 'error');
+          console.error('DocuFill: Capture mode error', chrome.runtime.lastError);
+        } else {
+          showToast('Capture mode active! Click a field and check console for DocuFill messages.', 'success');
+          setTimeout(() => {
+            console.log('%c🎯 DocuFill Capture Mode Active', 'color: #4f7cff; font-size: 16px; font-weight: bold;');
+            console.log('%cClick on a field in the document. You should see "🔵 DocuFill: Click detected!" messages here.', 'color: #22c55e; font-size: 12px;');
+            console.log('DocuFill is also attempting to extract fields from DocuSign\'s internal data structures.');
+          }, 500);
+          
+          // Try to extract fields from DocuSign internals
+          sendToActiveTab({ type: 'EXTRACT_DOCUSIGN_FIELDS' }, (response) => {
+            if (response && response.fields && response.fields.length > 0) {
+              showToast(`Found ${response.fields.length} field(s) in DocuSign internals!`, 'success');
+              response.fields.forEach(field => {
+                if (!state.pendingMappings.find(m => m.fieldKey === field.fieldKey)) {
+                  state.pendingMappings.push({
+                    fieldKey: field.fieldKey,
+                    fieldLabel: field.fieldLabel || field.fieldKey,
+                    column: ''
+                  });
+                }
+              });
+              renderMappingsList();
+            }
+          });
+        }
+      });
+    });
   } else {
     btn.textContent = '🎯 Start Capturing Fields';
-    btn.style.borderColor = '';
-    btn.style.color = '';
+    btn.classList.remove('capturing');
     $('mappingBanner').classList.remove('active');
     $('pendingCapture').style.display = 'none';
     sendToActiveTab({ type: 'CAPTURE_MODE_OFF' });
@@ -2115,6 +2345,23 @@ function sendToActiveTab(message, callback) {
 
 function listenForContentMessages() {
   chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'DOCUSIGN_FIELD_DETECTED') {
+      // Field detected from DocuSign's internal data
+      console.log('DocuFill Popup: Received field detection:', message.fieldKey, message.fieldLabel);
+      const existing = state.pendingMappings.find(m => m.fieldKey === message.fieldKey);
+      if (!existing) {
+        state.pendingMappings.push({
+          fieldKey: message.fieldKey,
+          fieldLabel: message.fieldLabel || message.fieldKey,
+          column: ''
+        });
+        renderMappingsList();
+        showToast(`✅ Detected field: ${message.fieldLabel || message.fieldKey}`, 'success');
+        console.log('DocuFill Popup: Added field to mappings. Total:', state.pendingMappings.length);
+      } else {
+        console.log('DocuFill Popup: Field already exists in mappings');
+      }
+    }
     if (message.type === 'FIELD_CAPTURED') {
       state.pendingField = { fieldKey: message.fieldKey, fieldLabel: message.fieldLabel };
       $('capturedFieldName').textContent = message.fieldLabel || message.fieldKey;
