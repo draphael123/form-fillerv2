@@ -9,6 +9,7 @@
   <meta property="og:description" content="Autofill DocuSign documents from CSV or Excel. Map fields once, fill in seconds. Chrome extension — no API keys, all data stays local."/>
   <meta property="og:type" content="website"/>
   <meta property="og:image" content="/public/og.png"/>
+  <!-- Add website/public/og.png (e.g. 1200x630) for social sharing previews -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
@@ -257,7 +258,7 @@
     .faq-item .faq-chevron { font-size: 18px; color: var(--blue); transition: transform 0.2s; flex-shrink: 0; }
     .faq-item.open .faq-chevron { transform: rotate(180deg); }
     .faq-item .faq-a-wrap { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
-    .faq-item.open .faq-a-wrap { max-height: 300px; }
+    .faq-item.open .faq-a-wrap { max-height: 400px; }
     .faq-a { font-size: 14px; color: var(--navy-muted); line-height: 1.6; padding: 0 24px 20px 24px; }
 
     .contact-section { background: var(--blue-pale); border-top: 2px solid var(--border); padding: 90px 40px; }
@@ -302,6 +303,14 @@
     }
     .footer-meta .sep { color: var(--border); }
 
+    .skip-link {
+      position: absolute; left: -9999px; z-index: 9999;
+      padding: 12px 20px; background: var(--blue); color: #fff;
+      font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600;
+      border-radius: 8px; text-decoration: none;
+    }
+    .skip-link:focus { left: 12px; top: 12px; outline: 2px solid var(--navy); outline-offset: 3px; }
+
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.5s ease, transform 0.5s ease; }
     .reveal.revealed { opacity: 1; transform: translateY(0); }
 
@@ -324,7 +333,7 @@
   </style>
 </head>
 <body id="top">
-
+<a href="#how-it-works" class="skip-link">Skip to main content</a>
 <nav>
   <a class="nav-logo" href="#top" aria-label="DocuFill home">
     <div class="nav-logo-mark">D</div>
@@ -333,13 +342,14 @@
   <nav class="nav-links" aria-label="Page sections">
     <a href="#how-it-works">How it works</a>
     <a href="#features">Features</a>
-    <a href="#demo">Try it</a>
+    <a href="#demo">Demo</a>
+    <a href="#try-it">Sample CSV</a>
     <a href="#install">Download</a>
     <a href="#usage">Usage</a>
     <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
-    <a href="#changelog">Changelog</a>
     <a href="#contact">Contact</a>
+    <a href="#changelog">Changelog</a>
   </nav>
   <a class="nav-cta" href="#install" aria-label="Jump to download and install steps">Download Extension</a>
 </nav>
@@ -352,11 +362,12 @@
   </h1>
   <p class="hero-sub">Map your CSV columns to DocuSign fields once. Autofill any document in seconds — no copy-paste, no errors, no manual entry.</p>
   <p class="hero-for">For legal, HR, and operations teams who send high-volume DocuSign envelopes.</p>
-  <p class="hero-requirements">Chrome only · Works with DocuSign eSignature · No account with us required.</p>
+  <p class="hero-requirements">Free · No signup · Chrome only · Works with DocuSign eSignature · No account with us required.</p>
   <div class="hero-actions">
     <span id="download-wrap">
       <a class="btn-download" id="hero-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download Extension</a>
     </span>
+    <span style="align-self:center; font-size:14px; font-weight:600; color:var(--navy-muted);">v1.2.0</span>
     <a class="btn-secondary-link" href="#install">How to download & install →</a>
   </div>
   <p class="hero-trust">No signup · No server uploads · Your data stays in your browser.</p>
@@ -511,7 +522,7 @@
       </div>
     </div>
     <p class="install-after">You’re done. Open a DocuSign document, click the DocuFill icon in the toolbar, and follow the usage guide below to upload your data and fill forms.</p>
-    <a class="btn-download" id="install-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download DocuFill</a>
+    <p style="margin-bottom:12px;"><a class="btn-download" id="install-download" href="public/docufill-extension.zip" download="docufill-extension.zip">↓ Download DocuFill</a> <span style="margin-left:12px; font-size:14px; font-weight:600; color:var(--navy-muted);">v1.2.0</span></p>
   </div>
 </div>
 
@@ -529,12 +540,12 @@
       <p>Click the DocuFill icon in your Chrome toolbar (you may need to click the puzzle piece and pin DocuFill). The extension popup will open.</p>
     </div>
     <div class="usage-item">
-      <h3>3. Upload your data file</h3>
-      <p>In the popup, click <strong>Upload CSV/Excel</strong> and choose a .csv, .xlsx, or .xls file. The first row should be your column headers (e.g. Name, Email, Company). DocuFill will show your columns and a list of records (rows).</p>
+      <h3>3. Upload your data file (or use the default)</h3>
+      <p>In the popup, click <strong>Upload CSV/Excel</strong> and choose a .csv, .xlsx, or .xls file. The first row should be your column headers (e.g. Name, Email, Company). DocuFill will show your columns and a list of records (rows). If you haven’t uploaded a file yet, a sample dataset is loaded by default so you can try mapping right away.</p>
     </div>
     <div class="usage-item">
       <h3>4. Map DocuSign fields to your columns</h3>
-      <p>Click <strong>Start mapping</strong> (or <strong>Map fields</strong>). Then click on a field in the DocuSign document. DocuFill will ask you to choose which column from your file should fill that field. Select the matching column and confirm. Repeat for every field you want to autofill. When done, click <strong>Stop mapping</strong>. You can save this mapping as a template so you don’t have to map again for the same document type.</p>
+      <p>In the <strong>Mapping</strong> tab, click <strong>Start Capturing Fields</strong> first (you’ll see a blue banner on the DocuSign page). Then click each field on the document; DocuFill will ask you to choose which column should fill it. For a faster start, use <strong>Scan page for fields</strong> to discover all form fields and auto-match them to your CSV columns—then add or adjust any mappings. When done, click <strong>Stop Capturing</strong>. Save the mapping as a template so you don’t have to map again for the same document type.</p>
     </div>
     <div class="usage-item">
       <h3>5. Fill the document</h3>
@@ -642,6 +653,15 @@
         <div class="faq-a">CSV (.csv) and Excel (.xlsx, .xls). The first row is used as column headers; columns are auto-detected for mapping.</div>
       </div>
     </div>
+    <div class="faq-item">
+      <button type="button" aria-expanded="false" aria-controls="faq-a4" id="faq-q4" onclick="this.parentElement.classList.toggle('open'); this.setAttribute('aria-expanded', this.parentElement.classList.contains('open'));">
+        <span>When I click on a field, nothing happens. Why?</span>
+        <span class="faq-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div class="faq-a-wrap" id="faq-a4" role="region" aria-labelledby="faq-q4">
+        <div class="faq-a">Make sure you’ve turned on <strong>Start Capturing Fields</strong> in the Mapping tab first. You should see a blue banner on the DocuSign page saying “Click any field to capture it.” DocuSign often shows the document inside an iframe—DocuFill now enables capture in all frames, so clicks on fields in the document should register. If one still doesn’t, try <strong>Scan page for fields</strong> to discover and map fields automatically.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -673,12 +693,13 @@
   <div class="footer-links">
     <a href="#install">Download</a>
     <a href="#how-it-works">How it works</a>
-    <a href="#demo">Try it</a>
+    <a href="#demo">Demo</a>
+    <a href="#try-it">Sample CSV</a>
     <a href="#usage">Usage</a>
     <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
-    <a href="#changelog">Changelog</a>
     <a href="#contact">Contact</a>
+    <a href="#changelog">Changelog</a>
   </div>
   <div class="footer-meta">
     <span>DocuFill · For use with your own DocuSign account</span>
@@ -687,7 +708,7 @@
     <span class="sep">·</span>
     <span>We don’t collect your data.</span>
     <span class="sep">·</span>
-    <span>Last updated Feb 2025 · v1.2.0</span>
+    <span>Last updated Feb 21, 2025 · v1.2.0</span>
   </div>
 </footer>
 
