@@ -290,9 +290,14 @@
 
     <div class="section-label">Record <span id="recordProgress" class="record-progress"></span></div>
     <div class="record-selector">
-      <div class="search-input-wrap" style="margin-bottom:6px;">
-        <span class="search-icon" aria-hidden="true">⌕</span>
-        <input type="text" id="recordSearch" placeholder="Search by name, ID…" aria-label="Search records" />
+      <div style="display:flex; gap:6px; margin-bottom:6px;">
+        <div class="search-input-wrap" style="flex:1;">
+          <span class="search-icon" aria-hidden="true">⌕</span>
+          <input type="text" id="recordSearch" placeholder="Search by name, ID…" aria-label="Search records" />
+        </div>
+        <select id="searchColumnSelect" style="width:120px; flex-shrink:0;" aria-label="Search column filter">
+          <option value="">All columns</option>
+        </select>
       </div>
       <div id="recordPagination" class="record-pagination" style="display:none;"></div>
       <select id="recordSelect" size="5" style="height:100px; padding:4px;" aria-label="Select record to fill"></select>
@@ -320,6 +325,7 @@
       <div class="section-label">Recent fills</div>
       <div id="fillHistoryList" style="font-size:11px; color:var(--text-muted); max-height:60px; overflow-y:auto;"></div>
     </div>
+    <button class="btn btn-secondary btn-sm" id="clearFillMarkersBtn" style="margin-top:6px; width:100%; display:none;">Clear fill markers</button>
   </div>
 
   <!-- MAPPING TAB -->
@@ -533,6 +539,7 @@
   </div>
 
   <div class="toast" id="toast" aria-live="polite"></div>
+  <script src="db.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

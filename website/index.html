@@ -229,6 +229,8 @@
     .usage-item ul { margin: 8px 0 0 20px; font-size: 14px; color: var(--navy-muted); line-height: 1.7; }
 
     .changelog-section { background: var(--blue-pale); border-top: 2px solid var(--border); }
+    .last-updated-line { font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 600; color: var(--navy); margin-bottom: 8px; }
+    .last-updated-line span { color: var(--blue); }
     .changelog-list { margin-top: 24px; }
     .changelog-item {
       display: flex; gap: 16px; align-items: flex-start;
@@ -552,8 +554,22 @@
 <div class="section changelog-section reveal" id="changelog">
   <div class="section-eyebrow">Recent updates</div>
   <h2 class="section-title">Changelog</h2>
-  <p class="section-sub">Last deploy: February 2025. What’s new on this site and in the extension.</p>
+  <p class="section-sub">What's new on this site and in the extension.</p>
+  <p class="last-updated-line">Last updated: <span>February 21, 2025</span></p>
   <div class="changelog-list">
+    <div class="changelog-item">
+      <span class="changelog-date">Feb 21, 2025</span>
+      <div class="changelog-body">
+        <strong>Extension</strong>
+        <ul>
+          <li><strong>Default data</strong> — A sample CSV is now loaded automatically when you open the popup and haven't loaded a file yet, so you don't have to select one to get started.</li>
+        </ul>
+        <strong>Website</strong>
+        <ul>
+          <li>Extension download zip rebuilt and deployed so the Download button serves the latest build (including the default sample data).</li>
+        </ul>
+      </div>
+    </div>
     <div class="changelog-item">
       <span class="changelog-date">Feb 2025</span>
       <div class="changelog-body">

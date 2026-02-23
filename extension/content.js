@@ -101,8 +101,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true, count });
     return true;
   }
-  if (message.type === 'CAPTURE_MODE_ON') activateCaptureMode();
-  if (message.type === 'CAPTURE_MODE_OFF') deactivateCaptureMode();
+  if (message.type === 'CAPTURE_MODE_ON') {
+    activateCaptureMode();
+    if (isTopFrame()) broadcastToFrames(DOCUFILL_PREFIX + 'CAPTURE_MODE_ON');
+  }
+  if (message.type === 'CAPTURE_MODE_OFF') {
+    deactivateCaptureMode();
+    if (isTopFrame()) broadcastToFrames(DOCUFILL_PREFIX + 'CAPTURE_MODE_OFF');
+  }
   if (message.type === 'FILL_FIELDS') {
     const mappings = message.mappings;
     const record = message.record;
@@ -152,8 +158,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+function broadcastToFrames(type) {
+  try {
+    const iframes = document.querySelectorAll('iframe');
+    iframes.forEach(function (frame) {
+      try { frame.contentWindow.postMessage({ type: type }, '*'); } catch (e) {}
+    });
+  } catch (e) {}
+}
+
 window.addEventListener('message', function (ev) {
   if (!ev.data) return;
+  if (ev.data.type === DOCUFILL_PREFIX + 'CAPTURE_MODE_ON') { activateCaptureMode(); return; }
+  if (ev.data.type === DOCUFILL_PREFIX + 'CAPTURE_MODE_OFF') { deactivateCaptureMode(); return; }
   if (ev.data.type === DOCUFILL_PREFIX + 'FILL') {
     const result = fillFields(ev.data.mappings || [], ev.data.record || {}, ev.data.failedKeysOnly || null);
     try { ev.source.postMessage({ type: DOCUFILL_PREFIX + 'FILL_RESULT', result: result }, '*'); } catch (e) {}
@@ -298,17 +315,24 @@ function triggerEvents(el, events) {
 }
 
 function findInputElement(el) {
+  if (!el || !el.getBoundingClientRect) return null;
   let target = el;
   let depth = 0;
-  while (target && depth < 5) {
+  while (target && depth < 8) {
     const tag = target.tagName?.toLowerCase();
-    if (['input', 'select', 'textarea'].includes(tag)) return target;
-    if (target.contentEditable === 'true') return target;
+    if (['input', 'select', 'textarea'].includes(tag)) {
+      if (tag === 'input' && ['hidden', 'submit', 'button', 'image'].includes((target.type || '').toLowerCase())) { target = target.parentElement; depth++; continue; }
+      return target;
+    }
+    if (target.contentEditable === 'true' || target.getAttribute('contenteditable') === 'true') return target;
     if (target.classList && (
       target.classList.contains('ds-field') ||
       target.getAttribute('data-testid')?.includes('field') ||
-      target.getAttribute('role') === 'textbox'
+      target.getAttribute('role') === 'textbox' ||
+      target.getAttribute('role') === 'combobox'
     )) return target;
+    var inner = target.querySelector && target.querySelector('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea, [contenteditable="true"], [role="textbox"]');
+    if (inner) return inner;
     target = target.parentElement;
     depth++;
   }
